@@ -48,8 +48,11 @@ export interface Carga<T> {
   recargar: () => void;
 }
 
-/** Carga datos asíncronos y permite recargarlos. */
-export function useCarga<T>(fn: () => Promise<T>, deps: unknown[] = []): Carga<T> {
+/**
+ * Carga datos asíncronos y permite recargarlos. Con `cadaMs` los refresca solos cada tanto,
+ * sin parpadeo: se muestran los datos anteriores hasta que llegan los nuevos.
+ */
+export function useCarga<T>(fn: () => Promise<T>, deps: unknown[] = [], cadaMs?: number): Carga<T> {
   const [estado, setEstado] = useState<{ datos: T | null; error: string | null; cargando: boolean }>({
     datos: null,
     error: null,
@@ -60,16 +63,22 @@ export function useCarga<T>(fn: () => Promise<T>, deps: unknown[] = []): Carga<T
 
   useEffect(() => {
     let vigente = true;
-    setEstado((e) => ({ ...e, cargando: true, error: null }));
-    fn().then(
-      (datos) => vigente && setEstado({ datos, error: null, cargando: false }),
-      (err: unknown) => vigente && setEstado({ datos: null, error: err instanceof Error ? err.message : 'Error', cargando: false }),
-    );
+    const cargar = (inicial: boolean) => {
+      if (inicial) setEstado((e) => ({ ...e, cargando: true, error: null }));
+      fn().then(
+        (datos) => vigente && setEstado({ datos, error: null, cargando: false }),
+        (err: unknown) =>
+          vigente && setEstado((e) => ({ datos: inicial ? null : e.datos, error: inicial ? (err instanceof Error ? err.message : 'Error') : e.error, cargando: false })),
+      );
+    };
+    cargar(true);
+    const t = cadaMs ? setInterval(() => cargar(false), cadaMs) : undefined;
     return () => {
       vigente = false;
+      if (t) clearInterval(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version, ...deps]);
+  }, [version, cadaMs, ...deps]);
 
   return { ...estado, recargar };
 }

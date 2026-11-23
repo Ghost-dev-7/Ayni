@@ -86,4 +86,4 @@ export const tonoEstado = (e: string): 'green' | 'blue' | 'gray' | 'red' => (e =
 export const nombreEstado = (e: string) => (e === 'publicada' ? 'Publicada' : e === 'reservada' ? 'Reservada' : e === 'recogida' ? 'Recogida' : 'Vencida');
 
 export const tonoAccion = (a: string): 'green' | 'blue' | 'gray' | 'red' | 'yellow' =>
-  a.startsWith('Recogida') ? 'green' : a === 'Reservada' ? 'blue' : a.includes('vencida') ? 'red' : a.startsWith('Alta') || a.includes('ctivación') ? 'yellow' : 'gray';
+  a.startsWith('Recogida') || a === 'Entró al inventario' ? 'green' : a === 'Reservada' ? 'blue' : a.includes('vencida') || a === 'Stock bajo' || a === 'Producto agotado' ? 'red' : a.startsWith('Alta') || a.includes('ctivación') ? 'yellow' : 'gray';

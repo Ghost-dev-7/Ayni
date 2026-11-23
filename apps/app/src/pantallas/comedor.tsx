@@ -1,4 +1,4 @@
-import type { Comedor, Comercio, Sugerencia } from '@ayni/shared';
+import { CATEGORIAS, type Categoria, type Comedor, type ComedorPerfil, type Comercio, type Sugerencia } from '@ayni/shared';
 import { useState, type FormEvent } from 'react';
 import { api, type DonacionN } from '../api.ts';
 import { Cabecera, Chip, Estado, Marco } from '../componentes.tsx';
@@ -21,11 +21,67 @@ function Puntaje({ valor, elegible }: { valor: number; elegible: boolean }) {
   );
 }
 
+/** Lo que el comedor declara sobre sí mismo (raciones, frío y horario). El emparejamiento lo usa para calcular la capacidad. */
+function DatosComedor({ comedor, alGuardar }: { comedor: Comedor; alGuardar: (cambios: Partial<ComedorPerfil>) => Promise<void> }) {
+  const [raciones, setRaciones] = useState(String(comedor.racionesDia));
+  const [frio, setFrio] = useState(comedor.refrigeracion);
+  const [horario, setHorario] = useState(comedor.horarioRecojo);
+  const [listo, setListo] = useState(false);
+
+  const guardar = async (e: FormEvent) => {
+    e.preventDefault();
+    setListo(false);
+    await alGuardar({ racionesDia: Number(raciones), refrigeracion: frio, horarioRecojo: horario });
+    setListo(true);
+  };
+
+  return (
+    <form className="stack" style={{ marginTop: 10 }} onSubmit={guardar}>
+      <label className="field"><span>Raciones por día</span><input className="input" type="number" min="1" value={raciones} onChange={(e) => { setRaciones(e.target.value); setListo(false); }} required /></label>
+      <div className="checks"><label><input type="checkbox" checked={frio} onChange={(e) => { setFrio(e.target.checked); setListo(false); }} /> Tenemos refrigeración</label></div>
+      <label className="field"><span>Horario de recojo</span><input className="input" value={horario} onChange={(e) => { setHorario(e.target.value); setListo(false); }} required minLength={3} /></label>
+      <button className="btn sm" type="submit">Guardar datos</button>
+      {listo && <div className="aviso ok" role="status">✓ Datos guardados. Tus ofertas ya los usan.</div>}
+    </form>
+  );
+}
+
 export function ComedorOfertas({ sesion }: { sesion: Sesion }) {
   const comedores = useCarga(api.comedores);
-  const ofertas = useCarga(() => api.ofertas(sesion.id), [sesion.id]);
+  const ofertas = useCarga(() => api.ofertas(sesion.id), [sesion.id], 10_000);
   const comedor = comedores.datos?.find((c) => c.id === sesion.id);
+  const [soloLoMio, setSoloLoMio] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [errorPref, setErrorPref] = useState<string | null>(null);
   const ahora = new Date();
+
+  /** Guarda lo que el comedor busca (y sus datos) y vuelve a ordenar las ofertas con el puntaje nuevo. */
+  const guardarPerfil = async (cambios: Partial<ComedorPerfil>) => {
+    if (!comedor) return;
+    setGuardando(true);
+    setErrorPref(null);
+    try {
+      await api.perfil(sesion.id, {
+        necesidades: comedor.necesidades,
+        racionesDia: comedor.racionesDia,
+        refrigeracion: comedor.refrigeracion,
+        horarioRecojo: comedor.horarioRecojo,
+        ...cambios,
+      });
+      comedores.recargar();
+      ofertas.recargar();
+    } catch (e) {
+      setErrorPref(e instanceof Error ? e.message : 'No se pudo guardar.');
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const alternar = (c: Categoria) => {
+    if (!comedor) return;
+    const n = comedor.necesidades.includes(c) ? comedor.necesidades.filter((x) => x !== c) : [...comedor.necesidades, c];
+    void guardarPerfil({ necesidades: n });
+  };
 
   return (
     <Marco pestanas={PESTANAS} activa="/comedor">
@@ -39,26 +95,54 @@ export function ComedorOfertas({ sesion }: { sesion: Sesion }) {
         </div>
       </div>
 
+      <section className="card" aria-labelledby="busco">
+        <h2 id="busco" style={{ fontSize: 17 }}>¿Qué buscas?</h2>
+        <p className="small muted" style={{ margin: '4px 0 10px' }}>Toca lo que necesitas: tus ofertas se ordenan según lo que elijas.</p>
+        <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+          {CATEGORIAS.map((c) => {
+            const activa = comedor?.necesidades.includes(c) ?? false;
+            return (
+              <button key={c} type="button" aria-pressed={activa} disabled={!comedor || guardando} className={`chip ${activa ? 'green' : 'gray'}`} style={{ border: 0, cursor: 'pointer', padding: '7px 12px' }} onClick={() => alternar(c)}>
+                {ICONO[c]} {NOMBRE_CATEGORIA[c]}{activa ? ' ✓' : ''}
+              </button>
+            );
+          })}
+        </div>
+        <div className="checks" style={{ marginTop: 10 }}>
+          <label><input type="checkbox" checked={soloLoMio} onChange={(e) => setSoloLoMio(e.target.checked)} /> Mostrar solo lo que busco</label>
+        </div>
+        {errorPref && <div className="aviso error" role="alert" style={{ marginTop: 8 }}>{errorPref}</div>}
+        {comedor && (
+          <details style={{ marginTop: 12 }}>
+            <summary className="small" style={{ fontWeight: 700, cursor: 'pointer' }}>Datos de mi comedor</summary>
+            <DatosComedor key={comedor.id} comedor={comedor} alGuardar={guardarPerfil} />
+          </details>
+        )}
+      </section>
+
       <div className="section-title"><h2>Ofertas para ti</h2></div>
       <p className="small muted" style={{ marginTop: -4, marginBottom: 10 }}>Ordenadas por puntaje: urgencia, cercanía, necesidad y capacidad de tu comedor.</p>
       <Estado carga={ofertas}>
         {(lista) => {
-          if (lista.length === 0) return <p className="muted">No hay donaciones disponibles por ahora.</p>;
+          const filtradas = soloLoMio && comedor && comedor.necesidades.length > 0 ? lista.filter((o) => comedor.necesidades.includes(o.donacion.categoria)) : lista;
+          if (filtradas.length === 0) {
+            return <p className="muted">{lista.length > 0 ? 'Ninguna oferta coincide con lo que buscas ahora. Desmarca "solo lo que busco" para ver todas.' : 'No hay donaciones disponibles por ahora.'}</p>;
+          }
           return (
             <div className="stack">
-              {lista.map(({ donacion: d, comercio, sugerencia: s }) => (
+              {filtradas.map(({ donacion: d, comercio, sugerencia: s }) => (
                 <a key={d.id} href={`#/comedor/donacion/${d.id}`} className="card" style={{ display: 'block', opacity: s.elegible ? 1 : 0.6 }}>
                   <div className="row">
                     <div className="thumb" aria-hidden="true">{ICONO[d.categoria]}</div>
                     <div className="grow">
-                      <b>{d.producto} · {cantidadTexto(d.cantidad, d.unidad)}</b>
+                      <b>{d.producto} · {cantidadTexto(d.cantidad, d.unidad, d.producto)}</b>
                       <div className="small muted">{comercio.nombre} · {km(s.distanciaKm)}</div>
                     </div>
                     <Puntaje valor={s.puntaje} elegible={s.elegible} />
                   </div>
                   <div className="row" style={{ marginTop: 10, flexWrap: 'wrap' }}>
                     <span className={`sem ${claseSemaforo(d.nivelCaducidad)}`}>{textoVence(d.caducaEn, ahora)}</span>
-                    {s.componentes.necesidad >= 70 && <Chip tono="green">{s.componentes.necesidad === 100 ? 'Necesidad prioritaria' : 'Te falta en inventario'}</Chip>}
+                    {s.componentes.necesidad >= 70 && <Chip tono="green">{s.componentes.necesidad === 100 ? 'Lo que buscas' : 'Te queda poco'}</Chip>}
                     {d.requiereFrio && <Chip tono={s.elegible ? 'blue' : 'red'}>{s.elegible ? 'Requiere frío' : 'Requiere frío (no disponible)'}</Chip>}
                     <Chip tono="gray">Recojo hasta {hora(d.ventanaHasta)}</Chip>
                   </div>
@@ -89,7 +173,7 @@ export function ComedorDonacion({ sesion, id }: { sesion: Sesion; id: number }) 
     setEnviando(true);
     try {
       await api.reservar(id, { comedorId: sesion.id, reservadoPor: nombre });
-      ir('/comedor/reservas');
+      ir('/comedor/notificaciones');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo reservar.');
       donacion.recargar();
@@ -114,7 +198,7 @@ export function ComedorDonacion({ sesion, id }: { sesion: Sesion; id: number }) 
               <div style={{ height: 130, borderRadius: 20, background: 'linear-gradient(135deg,#f4d9a8,#e8913a)', display: 'grid', placeItems: 'center', fontSize: 72 }} aria-hidden="true">
                 {ICONO[d.categoria]}
               </div>
-              <h1 style={{ fontSize: 24, marginTop: 14 }}>{d.producto} · {cantidadTexto(d.cantidad, d.unidad)}</h1>
+              <h1 style={{ fontSize: 24, marginTop: 14 }}>{d.producto} · {cantidadTexto(d.cantidad, d.unidad, d.producto)}</h1>
               <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
                 <span className={`sem ${claseSemaforo(d.nivelCaducidad)}`}>{textoVence(d.caducaEn, ahora)}</span>
                 <Chip tono="gray">{NOMBRE_CATEGORIA[d.categoria]}</Chip>
@@ -181,55 +265,8 @@ export function ComedorDonacion({ sesion, id }: { sesion: Sesion; id: number }) 
   );
 }
 
-export function ComedorReservas({ sesion }: { sesion: Sesion }) {
-  const comedores = useCarga(api.comedores);
-  const comercios = useCarga(api.comercios);
-  const donaciones = useCarga(() => api.donaciones());
-  const comedor = comedores.datos?.find((c) => c.id === sesion.id);
-  const ahora = new Date();
-
-  return (
-    <Marco pestanas={PESTANAS} activa="/comedor/reservas">
-      <div className="top"><b style={{ fontSize: 20, fontFamily: 'var(--serif)' }}>Mis reservas</b></div>
-      <Estado carga={donaciones}>
-        {(todas) => {
-          const mias = todas.filter((d) => d.comedorId === sesion.id);
-          const porRecoger = mias.filter((d) => d.estado === 'reservada').sort((a, b) => a.caducaEn.localeCompare(b.caducaEn));
-          const anteriores = mias.filter((d) => d.estado === 'recogida').sort((a, b) => (b.recogidaEn ?? '').localeCompare(a.recogidaEn ?? '')).slice(0, 6);
-          return (
-            <>
-              {porRecoger.length === 0 && <p className="muted small">No tienes reservas pendientes. Mira las ofertas disponibles.</p>}
-              <div className="stack">
-                {porRecoger.map((d) => (
-                  <TarjetaReserva key={d.id} d={d} comedor={comedor} comercio={comercios.datos?.find((c) => c.id === d.comercioId)} ahora={ahora} alCambiar={donaciones.recargar} />
-                ))}
-              </div>
-              {anteriores.length > 0 && (
-                <>
-                  <div className="section-title"><h2>Anteriores</h2></div>
-                  <div className="stack">
-                    {anteriores.map((d) => (
-                      <div className="list-item" key={d.id}>
-                        <div className="thumb" aria-hidden="true">{ICONO[d.categoria]}</div>
-                        <div className="grow">
-                          <b>{d.producto} · {cantidadTexto(d.cantidadRecibida ?? d.cantidad, d.unidad)}</b>
-                          <div className="small muted">{d.recogidaEn ? fechaHora(d.recogidaEn) : ''}</div>
-                        </div>
-                        <Chip tono="green">✓ Recogida</Chip>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
-            </>
-          );
-        }}
-      </Estado>
-    </Marco>
-  );
-}
-
-function TarjetaReserva({ d, comedor, comercio, ahora, alCambiar }: { d: DonacionN; comedor?: Comedor; comercio?: Comercio; ahora: Date; alCambiar: () => void }) {
+/** Una reserva pendiente: el comedor confirma la recogida cuando retira el producto. */
+export function TarjetaReserva({ d, comedor, comercio, ahora, alCambiar }: { d: DonacionN; comedor?: Comedor; comercio?: Comercio; ahora: Date; alCambiar: () => void }) {
   const [estadoOk, setEstadoOk] = useState(false);
   const [cantidad, setCantidad] = useState(String(d.cantidad));
   const [quien, setQuien] = useState(d.reservadaPor ?? '');
@@ -256,7 +293,7 @@ function TarjetaReserva({ d, comedor, comercio, ahora, alCambiar }: { d: Donacio
       <div className="row">
         <div className="thumb" aria-hidden="true">{ICONO[d.categoria]}</div>
         <div className="grow">
-          <b>{d.producto} · {cantidadTexto(d.cantidad, d.unidad)}</b>
+          <b>{d.producto} · {cantidadTexto(d.cantidad, d.unidad, d.producto)}</b>
           <div className="small muted">{comercio?.nombre ?? 'Comercio'}{comercio && comedor ? ` · ${km(distanciaKm(comedor, comercio))}` : ''}</div>
           <span className={`sem ${claseSemaforo(d.nivelCaducidad)}`}>{textoVence(d.caducaEn, ahora)} · recoger hasta {hora(d.ventanaHasta)}</span>
         </div>
@@ -274,7 +311,7 @@ function TarjetaReserva({ d, comedor, comercio, ahora, alCambiar }: { d: Donacio
           <label><input type="checkbox" checked={estadoOk} onChange={(e) => setEstadoOk(e.target.checked)} /> El producto está en buen estado</label>
         </div>
         <label className="field">
-          <span>Cantidad recibida ({d.unidad})</span>
+          <span>Cantidad recibida ({d.unidad === 'unidades' ? 'unidades' : d.unidad})</span>
           <input className="input" type="number" min="0.1" max={d.cantidad} step="0.1" value={cantidad} onChange={(e) => setCantidad(e.target.value)} required />
         </label>
         <label className="field">
@@ -285,7 +322,7 @@ function TarjetaReserva({ d, comedor, comercio, ahora, alCambiar }: { d: Donacio
         <button className="btn block" style={{ minHeight: 48 }} disabled={enviando || !estadoOk} type="submit">
           {enviando ? 'Confirmando…' : 'Confirmar recogida'}
         </button>
-        <p className="hint">Se registrará quién recibió el alimento y pasará automáticamente a tu inventario.</p>
+        <p className="hint">Se registrará quién recibió el alimento y pasará solo a tu inventario.</p>
       </form>
     </section>
   );

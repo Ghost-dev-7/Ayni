@@ -1,26 +1,35 @@
-import { CATEGORIAS, TIPOS_SALIDA, UNIDADES, type Categoria, type ProductoInventario, type TipoSalida, type Unidad } from '@ayni/shared';
-import { useState, type FormEvent } from 'react';
+import { STOCK_MINIMO, type ProductoInventario } from '@ayni/shared';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../api.ts';
 import { Chip, Estado, Marco } from '../componentes.tsx';
-import { ICONO, NOMBRE_CATEGORIA, aInputLocal, cantidadTexto, claseSemaforo, fechaHora, textoVence } from '../formato.ts';
+import { ICONO, cantidadTexto, claseSemaforo, fechaHora, textoVence } from '../formato.ts';
 import { useCarga, type Sesion } from '../sesion.ts';
 import { PESTANAS_COMEDOR as PESTANAS } from './pestanas.ts';
 
-const NOMBRE_TIPO: Record<TipoSalida, string> = { consumo: 'Consumo (se cocinó o sirvió)', merma: 'Merma (se echó a perder)', salida: 'Salida (se entregó a otro lugar)' };
-
 type Nivel = 'vencido' | 'rojo' | 'amarillo' | 'verde' | 'sin-fecha';
 const semaforo = (n: Nivel) => (n === 'sin-fecha' ? null : claseSemaforo(n));
+const clave = (p: Pick<ProductoInventario, 'producto' | 'unidad'>) => `${p.producto}|${p.unidad}`;
 
+/**
+ * Inventario del comedor. El stock no se escribe a mano: sube solo cuando se recoge una donación
+ * y baja solo cuando se registra lo consumido. Por debajo de 10 se marca en rojo.
+ */
 export function ComedorInventario({ sesion }: { sesion: Sesion }) {
-  const inv = useCarga(() => api.inventario(sesion.id), [sesion.id]);
-  const [panel, setPanel] = useState<'entrada' | 'salida' | null>(null);
+  const inv = useCarga(() => api.inventario(sesion.id), [sesion.id], 8_000);
+  const [abierto, setAbierto] = useState(false);
+  const [elegido, setElegido] = useState<string | null>(null);
   const [vista, setVista] = useState<'productos' | 'lotes'>('productos');
-  const [aviso, setAviso] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<{ texto: string; alerta: boolean } | null>(null);
   const ahora = new Date();
 
-  const listo = (mensaje: string) => {
-    setPanel(null);
-    setAviso(mensaje);
+  const consumir = (k: string | null) => {
+    setElegido(k);
+    setAbierto(true);
+  };
+
+  const listo = (texto: string, alerta: boolean) => {
+    setAbierto(false);
+    setAviso({ texto, alerta });
     inv.recargar();
   };
 
@@ -28,23 +37,22 @@ export function ComedorInventario({ sesion }: { sesion: Sesion }) {
     <Marco pestanas={PESTANAS} activa="/comedor/inventario">
       <div className="top">
         <b style={{ fontSize: 20, fontFamily: 'var(--serif)' }}>Inventario</b>
-        <div className="row" style={{ gap: 6 }}>
-          <button className="btn sm" type="button" onClick={() => setPanel(panel === 'entrada' ? null : 'entrada')}>＋ Entrada</button>
-          <button className="btn sm soft" type="button" onClick={() => setPanel(panel === 'salida' ? null : 'salida')}>− Salida</button>
-        </div>
+        <button className="btn sm" type="button" onClick={() => (abierto ? setAbierto(false) : consumir(null))}>− Registrar consumo</button>
       </div>
-      {aviso && <div className="aviso ok" role="status" style={{ marginBottom: 12 }}>✓ {aviso}</div>}
+      <p className="small muted" style={{ marginTop: -6, marginBottom: 10 }}>
+        El stock sube solo cuando recoges una donación y baja solo cuando registras lo que consumes. Mínimo: <b>{STOCK_MINIMO}</b>; por debajo se marca en rojo.
+      </p>
+      {aviso && <div className={`aviso ${aviso.alerta ? 'error' : 'ok'}`} role="status" style={{ marginBottom: 12 }}>{aviso.alerta ? '⚠️' : '✓'} {aviso.texto}</div>}
 
       <Estado carga={inv}>
         {(d) => (
           <>
-            {panel === 'entrada' && <FormEntrada comedorId={sesion.id} alGuardar={listo} />}
-            {panel === 'salida' && <FormSalida comedorId={sesion.id} productos={d.productos.filter((p) => p.total > 0)} alGuardar={listo} />}
+            {abierto && <FormConsumo key={elegido ?? 'ninguno'} comedorId={sesion.id} productos={d.productos.filter((p) => p.total > 0)} inicial={elegido} alGuardar={listo} />}
 
             <div className="stat-grid">
-              <div className="stat"><b>{Math.round(d.resumen.stockKg)} kg</b><span>Stock (sin contar lo vencido)</span></div>
+              <div className="stat"><b>{Math.round(d.resumen.stockKg)} kg</b><span>Stock aproximado (sin lo vencido)</span></div>
+              <div className="stat"><b style={{ color: d.resumen.productosBajoMinimo > 0 ? 'var(--red)' : undefined }}>{d.resumen.productosBajoMinimo}</b><span>Productos bajo {STOCK_MINIMO}</span></div>
               <div className="stat"><b style={{ color: d.resumen.lotesPorVencer + d.resumen.lotesVencidos > 0 ? 'var(--red)' : undefined }}>{d.resumen.lotesPorVencer + d.resumen.lotesVencidos}</b><span>Lotes por vencer o vencidos</span></div>
-              <div className="stat"><b style={{ color: d.resumen.productosBajoMinimo > 0 ? 'var(--red)' : undefined }}>{d.resumen.productosBajoMinimo}</b><span>Productos bajo el mínimo</span></div>
               <div className="stat"><b>{d.productos.filter((p) => p.total > 0).length}</b><span>Productos en stock</span></div>
             </div>
 
@@ -55,10 +63,28 @@ export function ComedorInventario({ sesion }: { sesion: Sesion }) {
 
             {vista === 'productos' ? (
               <div className="stack" style={{ marginTop: 12 }}>
-                {d.productos.length === 0 && <p className="muted small">Todavía no hay productos. Registra una entrada o recoge una donación.</p>}
-                {d.productos.map((p) => (
-                  <FilaProducto key={`${p.producto}|${p.unidad}`} p={p} comedorId={sesion.id} ahora={ahora} alCambiar={inv.recargar} />
-                ))}
+                {d.productos.length === 0 && <p className="muted small">Todavía no hay productos. Aparecerán cuando recojas una donación.</p>}
+                {d.productos.map((p) => {
+                  const s = semaforo(p.nivelCaducidad);
+                  return (
+                    <div className="card" key={clave(p)} style={{ padding: 12, borderColor: p.bajoMinimo ? 'var(--red)' : undefined, background: p.bajoMinimo ? 'var(--red-100)' : undefined }}>
+                      <div className="row">
+                        <div className="thumb" aria-hidden="true">{ICONO[p.categoria]}</div>
+                        <div className="grow">
+                          <b>{p.producto}</b>
+                          <div className="small" style={{ color: p.bajoMinimo ? 'var(--red)' : 'var(--muted)', fontWeight: p.bajoMinimo ? 700 : 400 }}>
+                            {cantidadTexto(p.total, p.unidad, p.producto)} · {p.lotes} {p.lotes === 1 ? 'lote' : 'lotes'}
+                          </div>
+                          <div className="row" style={{ marginTop: 4, flexWrap: 'wrap' }}>
+                            {p.bajoMinimo && <Chip tono="red">{p.total === 0 ? 'Agotado' : `Stock bajo: menos de ${STOCK_MINIMO}`}</Chip>}
+                            {s && p.proximaCaducidad && <span className={`sem ${s}`}>{textoVence(p.proximaCaducidad, ahora)}</span>}
+                          </div>
+                        </div>
+                        {p.total > 0 && <button className="btn sm ghost" type="button" onClick={() => consumir(clave(p))} aria-label={`Registrar consumo de ${p.producto}`}>Consumir</button>}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="stack" style={{ marginTop: 12 }}>
@@ -70,7 +96,7 @@ export function ComedorInventario({ sesion }: { sesion: Sesion }) {
                       <div className="thumb" aria-hidden="true">{ICONO[l.categoria]}</div>
                       <div className="grow">
                         <b>{l.producto}</b>
-                        <div className="small muted">{cantidadTexto(l.cantidad, l.unidad)} · {l.origen === 'donacion' ? 'donación' : 'carga manual'} · entró {fechaHora(l.creadoEn)}</div>
+                        <div className="small muted">{cantidadTexto(l.cantidad, l.unidad, l.producto)} · {l.origen === 'donacion' ? 'de una donación' : 'inventario inicial'} · entró {fechaHora(l.creadoEn)}</div>
                       </div>
                       {s ? <span className={`sem ${s}`}>{l.caducaEn ? textoVence(l.caducaEn, ahora) : ''}</span> : <Chip tono="gray">Sin fecha</Chip>}
                     </div>
@@ -85,118 +111,34 @@ export function ComedorInventario({ sesion }: { sesion: Sesion }) {
   );
 }
 
-function FilaProducto({ p, comedorId, ahora, alCambiar }: { p: ProductoInventario; comedorId: number; ahora: Date; alCambiar: () => void }) {
-  const [editando, setEditando] = useState(false);
-  const [minimo, setMinimo] = useState(String(p.minimo ?? ''));
-  const [error, setError] = useState<string | null>(null);
-  const s = semaforo(p.nivelCaducidad);
-
-  const guardar = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    try {
-      await api.minimo(comedorId, { producto: p.producto, unidad: p.unidad, minimo: Number(minimo || 0) });
-      setEditando(false);
-      alCambiar();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo guardar.');
-    }
-  };
-
-  return (
-    <div className="card" style={{ padding: 12, borderColor: p.bajoMinimo ? 'var(--red)' : undefined }}>
-      <div className="row">
-        <div className="thumb" aria-hidden="true">{ICONO[p.categoria]}</div>
-        <div className="grow">
-          <b>{p.producto}</b>
-          <div className="small muted">{cantidadTexto(p.total, p.unidad)} · {p.lotes} {p.lotes === 1 ? 'lote' : 'lotes'}{p.minimo !== null ? ` · mínimo ${p.minimo}` : ''}</div>
-          <div className="row" style={{ marginTop: 4, flexWrap: 'wrap' }}>
-            {p.bajoMinimo && <Chip tono="red">{p.total === 0 ? 'Agotado' : 'Stock bajo'}</Chip>}
-            {s && p.proximaCaducidad && <span className={`sem ${s}`}>{textoVence(p.proximaCaducidad, ahora)}</span>}
-          </div>
-        </div>
-        <button className="btn sm ghost" type="button" onClick={() => setEditando(!editando)} aria-label={`Cambiar el mínimo de ${p.producto}`}>Mínimo</button>
-      </div>
-      {editando && (
-        <form className="row" style={{ marginTop: 10 }} onSubmit={guardar}>
-          <label className="grow">
-            <span className="sr-only">Stock mínimo</span>
-            <input className="input" type="number" min="0" step="0.1" value={minimo} onChange={(e) => setMinimo(e.target.value)} placeholder="Mínimo (0 = sin alerta)" />
-          </label>
-          <button className="btn sm" type="submit">Guardar</button>
-        </form>
-      )}
-      {error && <div className="aviso error" role="alert" style={{ marginTop: 8 }}>{error}</div>}
-    </div>
-  );
-}
-
-function FormEntrada({ comedorId, alGuardar }: { comedorId: number; alGuardar: (m: string) => void }) {
-  const [producto, setProducto] = useState('');
-  const [categoria, setCategoria] = useState<Categoria>('abarrotes');
-  const [unidad, setUnidad] = useState<Unidad>('kg');
-  const [cantidad, setCantidad] = useState('10');
-  const [caduca, setCaduca] = useState(aInputLocal(new Date(Date.now() + 30 * 24 * 3_600_000)));
-  const [error, setError] = useState<string | null>(null);
-  const [enviando, setEnviando] = useState(false);
-
-  const enviar = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setEnviando(true);
-    try {
-      await api.entrada(comedorId, { producto, categoria, unidad, cantidad: Number(cantidad), caducaEn: caduca ? new Date(caduca).toISOString() : null });
-      alGuardar(`Entrada registrada: ${producto}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo registrar.');
-    } finally {
-      setEnviando(false);
-    }
-  };
-
-  return (
-    <form className="card stack" style={{ marginBottom: 14 }} onSubmit={enviar}>
-      <b>Nueva entrada al inventario</b>
-      <label className="field"><span>Producto</span><input className="input" value={producto} onChange={(e) => setProducto(e.target.value)} placeholder="Ej.: Arroz" required minLength={2} /></label>
-      <div className="row">
-        <label className="field grow"><span>Categoría</span>
-          <select className="input" value={categoria} onChange={(e) => setCategoria(e.target.value as Categoria)}>
-            {CATEGORIAS.map((c) => <option key={c} value={c}>{NOMBRE_CATEGORIA[c]}</option>)}
-          </select>
-        </label>
-        <label className="field grow"><span>Unidad</span>
-          <select className="input" value={unidad} onChange={(e) => setUnidad(e.target.value as Unidad)}>
-            {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
-          </select>
-        </label>
-      </div>
-      <label className="field"><span>Cantidad</span><input className="input" type="number" min="0.1" step="0.1" value={cantidad} onChange={(e) => setCantidad(e.target.value)} required /></label>
-      <label className="field"><span>Caducidad (déjala vacía si no tiene)</span><input className="input" type="datetime-local" value={caduca} onChange={(e) => setCaduca(e.target.value)} /></label>
-      {error && <div className="aviso error" role="alert">{error}</div>}
-      <button className="btn block" disabled={enviando} type="submit">{enviando ? 'Guardando…' : 'Registrar entrada'}</button>
-    </form>
-  );
-}
-
-function FormSalida({ comedorId, productos, alGuardar }: { comedorId: number; productos: ProductoInventario[]; alGuardar: (m: string) => void }) {
-  const [clave, setClave] = useState(productos[0] ? `${productos[0].producto}|${productos[0].unidad}` : '');
-  const [tipo, setTipo] = useState<TipoSalida>('consumo');
+function FormConsumo({ comedorId, productos, inicial, alGuardar }: { comedorId: number; productos: ProductoInventario[]; inicial: string | null; alGuardar: (texto: string, alerta: boolean) => void }) {
+  const [k, setK] = useState(inicial && productos.some((p) => clave(p) === inicial) ? inicial : productos[0] ? clave(productos[0]) : '');
   const [cantidad, setCantidad] = useState('1');
   const [motivo, setMotivo] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
-  const elegido = productos.find((p) => `${p.producto}|${p.unidad}` === clave);
+  const p = productos.find((x) => clave(x) === k);
+  const formulario = useRef<HTMLFormElement>(null);
 
-  if (productos.length === 0) return <div className="aviso" style={{ marginBottom: 14 }}>No hay productos en stock para registrar una salida.</div>;
+  // Al abrirse, el formulario se muestra solo aunque se haya tocado "Consumir" al final de la lista.
+  useEffect(() => {
+    formulario.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, []);
+
+  if (productos.length === 0) return <div className="aviso" style={{ marginBottom: 14 }}>No hay productos en stock para registrar un consumo.</div>;
+
+  const n = Number(cantidad);
+  const quedaria = p && Number.isFinite(n) ? Math.round((p.total - n) * 1000) / 1000 : null;
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault();
-    if (!elegido) return;
+    if (!p) return;
     setError(null);
     setEnviando(true);
     try {
-      await api.salida(comedorId, { producto: elegido.producto, unidad: elegido.unidad, tipo, cantidad: Number(cantidad), motivo: motivo || undefined });
-      alGuardar(`${tipo === 'consumo' ? 'Consumo' : tipo === 'merma' ? 'Merma' : 'Salida'} registrado: ${elegido.producto}`);
+      const r = await api.consumo(comedorId, { producto: p.producto, unidad: p.unidad, cantidad: n, motivo: motivo || undefined });
+      const bajo = r.quedan < STOCK_MINIMO;
+      alGuardar(`Consumo registrado: ${cantidadTexto(n, p.unidad, p.producto)} de ${p.producto}. ${r.quedan === 0 ? 'Se agotó.' : `Quedan ${cantidadTexto(r.quedan, p.unidad, p.producto)}.`}${bajo ? ' Stock bajo.' : ''}`, bajo);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo registrar.');
     } finally {
@@ -205,23 +147,27 @@ function FormSalida({ comedorId, productos, alGuardar }: { comedorId: number; pr
   };
 
   return (
-    <form className="card stack" style={{ marginBottom: 14 }} onSubmit={enviar}>
-      <b>Registrar salida</b>
-      <label className="field"><span>Producto</span>
-        <select className="input" value={clave} onChange={(e) => setClave(e.target.value)}>
-          {productos.map((p) => <option key={`${p.producto}|${p.unidad}`} value={`${p.producto}|${p.unidad}`}>{p.producto} ({cantidadTexto(p.total, p.unidad)})</option>)}
+    <form ref={formulario} className="card stack" style={{ marginBottom: 14, scrollMarginTop: 8 }} onSubmit={enviar}>
+      <b>Registrar lo que consumiste</b>
+      <label className="field">
+        <span>Producto</span>
+        <select className="input" value={k} onChange={(e) => setK(e.target.value)}>
+          {productos.map((x) => <option key={clave(x)} value={clave(x)}>{x.producto} (hay {cantidadTexto(x.total, x.unidad, x.producto)})</option>)}
         </select>
       </label>
-      <label className="field"><span>Tipo</span>
-        <select className="input" value={tipo} onChange={(e) => setTipo(e.target.value as TipoSalida)}>
-          {TIPOS_SALIDA.map((t) => <option key={t} value={t}>{NOMBRE_TIPO[t]}</option>)}
-        </select>
+      <label className="field">
+        <span>Cantidad consumida ({p ? (p.unidad === 'unidades' ? 'unidades' : p.unidad) : ''})</span>
+        <input className="input" type="number" min={p?.unidad === 'unidades' ? '1' : '0.1'} step={p?.unidad === 'unidades' ? '1' : '0.1'} max={p?.total} value={cantidad} onChange={(e) => setCantidad(e.target.value)} required />
       </label>
-      <label className="field"><span>Cantidad ({elegido?.unidad})</span><input className="input" type="number" min="0.1" step="0.1" max={elegido?.total} value={cantidad} onChange={(e) => setCantidad(e.target.value)} required /></label>
+      {p && quedaria !== null && quedaria >= 0 && (
+        <div className="small" style={{ color: quedaria < STOCK_MINIMO ? 'var(--red)' : 'var(--muted)', fontWeight: quedaria < STOCK_MINIMO ? 700 : 400 }}>
+          Quedarán {cantidadTexto(quedaria, p.unidad, p.producto)}{quedaria < STOCK_MINIMO ? `: por debajo del mínimo de ${STOCK_MINIMO}` : ''}.
+        </div>
+      )}
       <label className="field"><span>Motivo (opcional)</span><input className="input" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ej.: almuerzo del martes" /></label>
-      <p className="hint">Se descuenta primero el lote que vence antes (PEPS).</p>
+      <p className="hint">El stock se resta solo; no escribes cuánto queda. Se descuenta primero lo que vence antes.</p>
       {error && <div className="aviso error" role="alert">{error}</div>}
-      <button className="btn block" disabled={enviando} type="submit">{enviando ? 'Guardando…' : 'Registrar salida'}</button>
+      <button className="btn block" disabled={enviando || !p} type="submit">{enviando ? 'Guardando…' : 'Registrar consumo'}</button>
     </form>
   );
 }

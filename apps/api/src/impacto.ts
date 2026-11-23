@@ -1,4 +1,4 @@
-import { KG_POR_RACION, type EstadoDonacion, type Impacto, type ImpactoComedor, type ImpactoComercio } from '@ayni/shared';
+import { KG_POR_RACION, aKgProducto, type EstadoDonacion, type Impacto, type ImpactoComedor, type ImpactoComercio } from '@ayni/shared';
 import type { BD } from './bd.ts';
 import { HORAS_ROJO, horasRestantes } from './caducidad.ts';
 import { listarComedores, listarComercios, listarDonaciones } from './repositorio.ts';
@@ -20,16 +20,17 @@ export function calcularImpacto(db: BD, ahora: Date): Impacto {
   const enVentana = todas.filter((d) => new Date(d.creadaEn).getTime() >= desde);
   const recogidas = enVentana.filter((d) => d.estado === 'recogida');
   const vencidas = enVentana.filter((d) => d.estado === 'vencida');
-  const kgDe = (lista: typeof recogidas) => lista.filter((d) => d.unidad === 'kg').reduce((s, d) => s + (d.cantidadRecibida ?? 0), 0);
+  // Todo se convierte a kilos equivalentes (con un peso aproximado por unidad) para poder sumar productos distintos.
+  const kgDe = (lista: typeof recogidas) => lista.reduce((s, d) => s + aKgProducto(d.cantidadRecibida ?? 0, d.unidad, d.producto), 0);
 
   const kgRescatados = kgDe(recogidas);
 
   // Kg recogidos por semana (4 semanas, de la más antigua a la más reciente).
   const kgPorSemana = [0, 0, 0, 0];
   for (const d of recogidas) {
-    if (d.unidad !== 'kg' || !d.recogidaEn) continue;
+    if (!d.recogidaEn) continue;
     const semana = Math.min(3, Math.max(0, Math.floor((new Date(d.recogidaEn).getTime() - desde) / (7 * DIA))));
-    kgPorSemana[semana] = (kgPorSemana[semana] ?? 0) + (d.cantidadRecibida ?? 0);
+    kgPorSemana[semana] = (kgPorSemana[semana] ?? 0) + aKgProducto(d.cantidadRecibida ?? 0, d.unidad, d.producto);
   }
 
   const cerradas = recogidas.length + vencidas.length;

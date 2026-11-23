@@ -113,12 +113,12 @@ export function Donaciones() {
                         <Fragment key={d.id}>
                           <tr>
                             <td>{d.codigo}</td>
-                            <td>{ICONO[d.categoria]} {d.producto} · {cantidadTexto(d.cantidad, d.unidad)}</td>
+                            <td>{ICONO[d.categoria]} {d.producto} · {cantidadTexto(d.cantidad, d.unidad, d.producto)}</td>
                             <td>{comercios.datos?.find((c) => c.id === d.comercioId)?.nombre ?? '—'}</td>
                             <td>{abierto ? <span className={`sem ${claseSemaforo(d.nivelCaducidad)}`}>{textoVence(d.caducaEn, ahora)}</span> : fechaHora(d.caducaEn)}</td>
                             <td><Chip tono={tonoEstado(d.estado)}>{nombreEstado(d.estado)}</Chip>{sinComedor && d.nivelCaducidad === 'rojo' && <> <Chip tono="red">Sin comedor</Chip></>}</td>
                             <td>{comedores.datos?.find((c) => c.id === d.comedorId)?.nombre ?? '—'}</td>
-                            <td>{d.recogidaEn ? `${fechaHora(d.recogidaEn)} · ${d.cantidadRecibida !== null ? cantidadTexto(d.cantidadRecibida, d.unidad) : ''}` : '—'}</td>
+                            <td>{d.recogidaEn ? `${fechaHora(d.recogidaEn)} · ${d.cantidadRecibida !== null ? cantidadTexto(d.cantidadRecibida, d.unidad, d.producto) : ''}` : '—'}</td>
                             <td>
                               {sinComedor && (
                                 <button className="btn ghost sm" type="button" aria-expanded={abierta === d.id} onClick={() => setAbierta(abierta === d.id ? null : d.id)}>

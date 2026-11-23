@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
+import { STOCK_MINIMO } from '@ayni/shared';
 import { abrirBD, type BD } from './bd.ts';
-import { fijarMinimo, inventarioCentral, obtenerInventario, productosFaltantes, registrarEntrada, registrarSalida } from './inventario.ts';
-import { crearComedor, crearComercio, crearDonacion, recogerDonacion, reservarDonacion } from './repositorio.ts';
+import { inventarioCentral, obtenerInventario, productosFaltantes, registrarConsumo, registrarEntrada } from './inventario.ts';
+import { crearComedor, crearComercio, crearDonacion, listarNotificacionesComedor, recogerDonacion, reservarDonacion } from './repositorio.ts';
 import { sembrar } from './semilla.ts';
 
 const AHORA = new Date('2026-11-23T15:00:00Z');
@@ -19,23 +20,31 @@ describe('inventario', () => {
     crearComedor(db, { ...base, nombre: 'Comedor 2' });
   });
 
-  const entrada = (producto: string, cantidad: number, horasParaVencer: number | null, comedorId = 1) =>
+  const entrada = (producto: string, cantidad: number, horasParaVencer: number | null, comedorId = 1, unidad: 'kg' | 'unidades' | 'litros' = 'kg') =>
     registrarEntrada(
       db,
       comedorId,
-      { producto, categoria: 'abarrotes', unidad: 'kg', cantidad, caducaEn: horasParaVencer === null ? null : enHoras(horasParaVencer) },
+      { producto, categoria: 'abarrotes', unidad, cantidad, caducaEn: horasParaVencer === null ? null : enHoras(horasParaVencer) },
       { origen: 'manual', ahora: AHORA },
     );
+  const consumir = (producto: string, cantidad: number, comedorId = 1, unidad: 'kg' | 'unidades' | 'litros' = 'kg') =>
+    registrarConsumo(db, comedorId, { producto, unidad, cantidad }, AHORA);
+  const acciones = (comedorId = 1) => listarNotificacionesComedor(db, comedorId).map((n) => n.accion);
 
-  it('registra una entrada con su lote, su movimiento y su evento', () => {
+  it('el mínimo es fijo: 10 de la unidad de cada producto', () => {
+    assert.equal(STOCK_MINIMO, 10);
+    entrada('Arroz', 50, null);
+    assert.equal(obtenerInventario(db, 1, AHORA).productos[0]!.minimo, 10);
+  });
+
+  it('registra una entrada con su lote y su aviso', () => {
     const lote = entrada('Arroz', 50, 24 * 200);
     assert.equal(lote.cantidad, 50);
     assert.equal(lote.cantidadInicial, 50);
-    assert.equal(lote.origen, 'manual');
     const inv = obtenerInventario(db, 1, AHORA);
     assert.equal(inv.productos.length, 1);
     assert.equal(inv.productos[0]!.total, 50);
-    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM eventos WHERE accion = 'Entrada de inventario'").get() as { n: number }).n, 1);
+    assert.ok(acciones().includes('Entró al inventario'));
   });
 
   it('suma los lotes del mismo producto sin distinguir mayúsculas', () => {
@@ -47,24 +56,25 @@ describe('inventario', () => {
     assert.equal(inv.productos[0]!.lotes, 2);
   });
 
-  it('descuenta primero el lote que vence antes (PEPS)', () => {
-    const tarde = entrada('Verduras', 10, 24 * 6);
-    const pronto = entrada('Verduras', 10, 24 * 1);
-    const r = registrarSalida(db, 1, { producto: 'Verduras', unidad: 'kg', tipo: 'consumo', cantidad: 14 }, AHORA);
+  it('al registrar lo consumido el stock se resta solo, empezando por el lote que vence antes (PEPS)', () => {
+    const tarde = entrada('Verduras surtidas', 10, 24 * 6);
+    const pronto = entrada('Verduras surtidas', 10, 24 * 1);
+    const r = consumir('Verduras surtidas', 14);
     assert.deepEqual(r.descontado, [
       { loteId: pronto.id, cantidad: 10 },
       { loteId: tarde.id, cantidad: 4 },
     ]);
+    assert.equal(r.quedan, 6);
     const lotes = obtenerInventario(db, 1, AHORA).lotes;
     assert.equal(lotes.length, 1);
     assert.equal(lotes[0]!.id, tarde.id);
     assert.equal(lotes[0]!.cantidad, 6);
   });
 
-  it('no deja sacar más de lo que hay ni un producto inexistente', () => {
+  it('no deja consumir más de lo que hay ni un producto inexistente', () => {
     entrada('Arroz', 5, null);
-    assert.throws(() => registrarSalida(db, 1, { producto: 'Arroz', unidad: 'kg', tipo: 'consumo', cantidad: 6 }, AHORA), /Solo hay 5/);
-    assert.throws(() => registrarSalida(db, 1, { producto: 'Fideos', unidad: 'kg', tipo: 'merma', cantidad: 1 }, AHORA), /No hay/);
+    assert.throws(() => consumir('Arroz', 6), /Solo hay 5/);
+    assert.throws(() => consumir('Fideos', 1, 1, 'unidades'), /No hay/);
     assert.equal(obtenerInventario(db, 1, AHORA).productos[0]!.total, 5);
   });
 
@@ -73,68 +83,97 @@ describe('inventario', () => {
     entrada('Arroz', 8, null, 2);
     assert.equal(obtenerInventario(db, 1, AHORA).productos[0]!.total, 50);
     assert.equal(obtenerInventario(db, 2, AHORA).productos[0]!.total, 8);
-    assert.throws(() => registrarSalida(db, 2, { producto: 'Arroz', unidad: 'kg', tipo: 'consumo', cantidad: 20 }, AHORA), /Solo hay 8/);
+    assert.throws(() => consumir('Arroz', 20, 2), /Solo hay 8/);
   });
 
-  it('avisa cuando un producto baja del mínimo y cuando se agota sigue apareciendo con stock 0', () => {
+  it('marca la alerta con menos de 10 y avisa solo al cruzar el mínimo', () => {
     entrada('Lentejas', 12, null);
-    fijarMinimo(db, 1, { producto: 'Lentejas', unidad: 'kg', minimo: 10 });
     assert.equal(obtenerInventario(db, 1, AHORA).productos[0]!.bajoMinimo, false);
-    registrarSalida(db, 1, { producto: 'Lentejas', unidad: 'kg', tipo: 'consumo', cantidad: 4 }, AHORA);
+
+    consumir('Lentejas', 1); // quedan 11: sigue sobre el mínimo
+    assert.ok(!acciones().includes('Stock bajo'));
+
+    consumir('Lentejas', 2); // quedan 9: cruza el mínimo
     assert.equal(obtenerInventario(db, 1, AHORA).productos[0]!.bajoMinimo, true);
-    registrarSalida(db, 1, { producto: 'Lentejas', unidad: 'kg', tipo: 'consumo', cantidad: 8 }, AHORA);
+    assert.equal(acciones().filter((a) => a === 'Stock bajo').length, 1);
+
+    consumir('Lentejas', 1); // quedan 8: ya estaba bajo, no repite el aviso
+    assert.equal(acciones().filter((a) => a === 'Stock bajo').length, 1);
+  });
+
+  it('con exactamente 10 todavía no hay alerta', () => {
+    entrada('Lentejas', 10, null);
+    assert.equal(obtenerInventario(db, 1, AHORA).productos[0]!.bajoMinimo, false);
+  });
+
+  it('al agotarse deja el aviso y el producto sigue apareciendo con stock 0', () => {
+    entrada('Lentejas', 12, null);
+    consumir('Lentejas', 12);
     const p = obtenerInventario(db, 1, AHORA).productos[0]!;
     assert.equal(p.total, 0);
     assert.equal(p.bajoMinimo, true);
+    assert.ok(acciones().includes('Producto agotado'));
     assert.ok(productosFaltantes(db, 1, AHORA).has('lentejas'));
   });
 
-  it('con mínimo 0 se quita la alerta', () => {
-    entrada('Lentejas', 2, null);
-    fijarMinimo(db, 1, { producto: 'Lentejas', unidad: 'kg', minimo: 10 });
-    assert.equal(obtenerInventario(db, 1, AHORA).resumen.productosBajoMinimo, 1);
-    fijarMinimo(db, 1, { producto: 'Lentejas', unidad: 'kg', minimo: 0 });
-    assert.equal(obtenerInventario(db, 1, AHORA).resumen.productosBajoMinimo, 0);
-  });
-
-  it('el resumen cuenta lotes por vencer y vencidos, y no suma lo vencido al stock', () => {
-    entrada('Pan', 10, 5);
-    entrada('Yogur', 4, -3);
+  it('el resumen cuenta lotes por vencer, vencidos y productos bajo el mínimo', () => {
+    entrada('Pan francés', 40, 5, 1, 'unidades');
+    entrada('Yogures', 4, -3, 1, 'unidades');
     entrada('Arroz', 50, 24 * 200);
     const r = obtenerInventario(db, 1, AHORA).resumen;
     assert.equal(r.lotes, 3);
     assert.equal(r.lotesPorVencer, 1);
     assert.equal(r.lotesVencidos, 1);
-    assert.equal(r.stockKg, 60);
+    assert.equal(r.productosBajoMinimo, 1); // los yogures: 4 < 10
+    // 40 panes de 0,1 kg + 50 kg de arroz; los yogures vencidos no cuentan.
+    assert.equal(r.stockKg, 54);
   });
 
-  it('una donación recogida entra sola al inventario del comedor', () => {
+  it('una donación recogida entra sola al inventario y deja su aviso', () => {
     const d = crearDonacion(
       db,
-      { comercioId: 1, producto: 'Pan francés', categoria: 'panaderia', cantidad: 20, unidad: 'kg', caducaEn: enHoras(6), ventanaDesde: enHoras(0), ventanaHasta: enHoras(5), requiereFrio: false },
+      { comercioId: 1, producto: 'Pan francés', categoria: 'panaderia', cantidad: 60, unidad: 'unidades', caducaEn: enHoras(6), ventanaDesde: enHoras(0), ventanaHasta: enHoras(5), requiereFrio: false },
       AHORA,
     );
     reservarDonacion(db, d.id, { comedorId: 2, reservadoPor: 'Rosa M.' }, AHORA);
-    recogerDonacion(db, d.id, { comedorId: 2, recogidoPor: 'Rosa M.', cantidadRecibida: 18, estadoOk: true }, AHORA);
+    recogerDonacion(db, d.id, { comedorId: 2, recogidoPor: 'Rosa M.', cantidadRecibida: 55, estadoOk: true }, AHORA);
     const inv = obtenerInventario(db, 2, AHORA);
     assert.equal(inv.productos[0]!.producto, 'Pan francés');
-    assert.equal(inv.productos[0]!.total, 18);
+    assert.equal(inv.productos[0]!.total, 55);
     assert.equal(inv.lotes[0]!.origen, 'donacion');
     assert.equal(inv.lotes[0]!.donacionId, d.id);
     assert.equal(obtenerInventario(db, 1, AHORA).lotes.length, 0);
+    const n = listarNotificacionesComedor(db, 2).find((x) => x.accion === 'Entró al inventario')!;
+    assert.match(n.detalle, /\+55 .* de Pan francés/);
+  });
+
+  it('las notificaciones de un comedor reúnen reserva, recogida, inventario y alertas, y no las de otro', () => {
+    const d = crearDonacion(
+      db,
+      { comercioId: 1, producto: 'Arroz', categoria: 'abarrotes', cantidad: 12, unidad: 'kg', caducaEn: enHoras(6), ventanaDesde: enHoras(0), ventanaHasta: enHoras(5), requiereFrio: false },
+      AHORA,
+    );
+    reservarDonacion(db, d.id, { comedorId: 1, reservadoPor: 'Rosa M.' }, AHORA);
+    recogerDonacion(db, d.id, { comedorId: 1, recogidoPor: 'Rosa M.', cantidadRecibida: 12, estadoOk: true }, AHORA);
+    consumir('Arroz', 5);
+    const del1 = acciones(1);
+    for (const esperada of ['Reservada', 'Recogida confirmada', 'Entró al inventario', 'Consumo de inventario', 'Stock bajo']) {
+      assert.ok(del1.includes(esperada), `falta "${esperada}"`);
+    }
+    assert.deepEqual(acciones(2), []);
+    assert.throws(() => listarNotificacionesComedor(db, 99), /no existe/);
   });
 
   it('el inventario central reúne toda la red', () => {
     entrada('Arroz', 50, 24 * 200, 1);
-    entrada('Pan', 10, 5, 2);
-    fijarMinimo(db, 2, { producto: 'Pan', unidad: 'kg', minimo: 30 });
+    entrada('Pan francés', 8, 5, 2, 'unidades');
     const c = inventarioCentral(db, AHORA);
     assert.equal(c.comedores.length, 2);
-    assert.equal(c.totales.stockKg, 60);
     assert.equal(c.porVencer.length, 1);
     assert.equal(c.porVencer[0]!.comedor, 'Comedor 2');
     assert.equal(c.bajoMinimo.length, 1);
-    assert.equal(c.bajoMinimo[0]!.producto, 'Pan');
+    assert.equal(c.bajoMinimo[0]!.producto, 'Pan francés');
+    assert.equal(c.bajoMinimo[0]!.minimo, 10);
   });
 
   it('con los datos sintéticos cada comedor tiene inventario y algunas alertas', () => {

@@ -10,12 +10,12 @@ const hora = (iso: string) => {
 };
 
 describe('interpretarTexto', () => {
-  it('entiende el ejemplo "20 kg de pan de ayer, recojo hasta las 6pm"', () => {
-    const b = interpretarTexto('20 kg de pan de ayer, recojo hasta las 6pm', AHORA);
+  it('entiende el ejemplo "20 panes de ayer, recojo hasta las 6pm"', () => {
+    const b = interpretarTexto('20 panes de ayer, recojo hasta las 6pm', AHORA);
     assert.equal(b.producto, 'Pan francés');
     assert.equal(b.categoria, 'panaderia');
     assert.equal(b.cantidad, 20);
-    assert.equal(b.unidad, 'kg');
+    assert.equal(b.unidad, 'unidades');
     assert.equal(hora(b.caducaEn), '23/11 23:59'); // pan de ayer: vence hoy
     assert.equal(hora(b.ventanaHasta), '23/11 18:00');
     assert.equal(b.requiereFrio, false);
@@ -41,8 +41,25 @@ describe('interpretarTexto', () => {
     assert.equal(b.producto, 'Leche fresca');
   });
 
+  it('respeta la unidad del catálogo y avisa si el comercio usó otra: el pan va por unidades, no por kg', () => {
+    const b = interpretarTexto('20 kg de pan de ayer, recojo hasta las 6pm', AHORA);
+    assert.equal(b.producto, 'Pan francés');
+    assert.equal(b.unidad, 'unidades');
+    assert.equal(b.cantidad, 20);
+    assert.ok(b.advertencias.some((a) => a.includes('se registra por unidades')));
+  });
+
+  it('fideos van por paquetes, el atún por latas y el arroz por kg', () => {
+    assert.equal(interpretarTexto('30 paquetes de fideos', AHORA).unidad, 'unidades');
+    assert.equal(interpretarTexto('48 latas de atún', AHORA).producto, 'Atún en lata');
+    assert.equal(interpretarTexto('48 latas de atún', AHORA).unidad, 'unidades');
+    const arroz = interpretarTexto('25 kg de arroz', AHORA);
+    assert.equal(arroz.unidad, 'kg');
+    assert.deepEqual(arroz.advertencias.filter((a) => a.includes('se registra por')), []);
+  });
+
   it('distingue "pan de molde" de "pan" y "leche evaporada" de "leche"', () => {
-    assert.equal(interpretarTexto('8 kg de pan de molde', AHORA).producto, 'Pan de molde');
+    assert.equal(interpretarTexto('8 bolsas de pan de molde', AHORA).producto, 'Pan de molde');
     assert.equal(interpretarTexto('30 latas de leche evaporada', AHORA).producto, 'Leche evaporada');
     assert.equal(interpretarTexto('30 latas de leche evaporada', AHORA).requiereFrio, false);
   });

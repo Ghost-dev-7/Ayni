@@ -1,19 +1,22 @@
-import type {
-  Categoria,
-  EntradaInventario,
-  InventarioCentral,
-  InventarioComedor,
-  LoteInventario,
-  MinimoInventario,
-  ProductoInventario,
-  SalidaInventario,
-  Unidad,
+import {
+  STOCK_MINIMO,
+  aKgProducto,
+  buscarEnCatalogo,
+  etiquetaUnidad,
+  type Categoria,
+  type ConsumoInventario,
+  type EntradaInventario,
+  type InventarioCentral,
+  type InventarioComedor,
+  type LoteInventario,
+  type ProductoInventario,
+  type Unidad,
 } from '@ayni/shared';
 import type { BD } from './bd.ts';
 import { horasRestantes, nivelCaducidad } from './caducidad.ts';
 import { ErrorDeNegocio } from './estados.ts';
 import { registrarEvento } from './eventos.ts';
-import { aKg, redondear3 } from './medidas.ts';
+import { redondear3 } from './medidas.ts';
 
 type Fila = Record<string, unknown>;
 
@@ -22,6 +25,7 @@ const HORAS_POR_VENCER = 72;
 
 const normal = (s: string) => s.trim().toLowerCase();
 const claveProducto = (producto: string, unidad: string) => `${normal(producto)}|${unidad}`;
+const codigoComedor = (id: number) => `KIT-${String(id).padStart(4, '0')}`;
 
 function loteDe(f: Fila, ahora: Date): LoteInventario {
   const caducaEn = f.caduca_en === null ? null : String(f.caduca_en);
@@ -47,6 +51,9 @@ const nombreComedor = (db: BD, id: number): string => {
   return f.nombre;
 };
 
+/** Unidades de un producto con el nombre que usa el comedor ("12 latas", "30 kg"). */
+const textoCantidad = (n: number, unidad: Unidad, producto: string) => `${redondear3(n)} ${etiquetaUnidad(producto, unidad)}`;
+
 export interface OpcionesEntrada {
   origen: 'donacion' | 'manual';
   donacionId?: number;
@@ -57,16 +64,20 @@ export interface OpcionesEntrada {
   sinEvento?: boolean;
 }
 
-/** Registra la entrada de un lote al inventario de un comedor (por donación recogida o carga manual). */
+/**
+ * Registra la entrada de un lote al inventario de un comedor.
+ * En la plataforma solo entra stock por una donación recogida; la carga manual se usa para el inventario inicial.
+ */
 export function registrarEntrada(db: BD, comedorId: number, e: EntradaInventario, op: OpcionesEntrada): LoteInventario {
   const ahora = op.ahora ?? new Date();
   const comedor = nombreComedor(db, comedorId);
+  const producto = buscarEnCatalogo(e.producto)?.nombre ?? e.producto.trim();
   const r = db
     .prepare(
       `INSERT INTO inventario_lotes (comedor_id, producto, categoria, unidad, cantidad, cantidad_inicial, caduca_en, origen, donacion_id, creado_en)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .run(comedorId, e.producto.trim(), e.categoria, e.unidad, e.cantidad, e.cantidad, e.caducaEn ?? null, op.origen, op.donacionId ?? null, ahora.toISOString());
+    .run(comedorId, producto, e.categoria, e.unidad, e.cantidad, e.cantidad, e.caducaEn ?? null, op.origen, op.donacionId ?? null, ahora.toISOString());
   const id = Number(r.lastInsertRowid);
   db.prepare('INSERT INTO inventario_movimientos (lote_id, comedor_id, tipo, cantidad, fecha, motivo, actor) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
     id,
@@ -77,26 +88,39 @@ export function registrarEntrada(db: BD, comedorId: number, e: EntradaInventario
     op.motivo ?? e.motivo ?? '',
     op.actor ?? comedor,
   );
-  if (op.origen === 'manual' && !op.sinEvento) {
+  if (!op.sinEvento) {
     registrarEvento(db, {
-      rol: 'comedor',
-      actor: comedor,
-      accion: 'Entrada de inventario',
-      entidad: `LOT-${String(id).padStart(4, '0')}`,
-      detalle: `${e.producto.trim()} · ${e.cantidad} ${e.unidad}`,
+      rol: 'sistema',
+      actor: 'Inventario',
+      accion: 'Entró al inventario',
+      entidad: codigoComedor(comedorId),
+      detalle: `+${textoCantidad(e.cantidad, e.unidad, producto)} de ${producto}${op.motivo ? ` · ${op.motivo}` : ''}`,
       fecha: ahora.toISOString(),
     });
   }
   return loteDe(db.prepare('SELECT * FROM inventario_lotes WHERE id = ?').get(id) as Fila, ahora);
 }
 
-export interface ResultadoSalida {
+export interface ResultadoConsumo {
   /** Lotes de los que se descontó, en el orden en que se usaron (primero lo que vence antes). */
   descontado: { loteId: number; cantidad: number }[];
+  /** Lo que queda del producto después del consumo. */
+  quedan: number;
 }
 
-/** Registra consumo, merma o salida de un producto, descontando primero lo que vence antes (PEPS). */
-export function registrarSalida(db: BD, comedorId: number, s: SalidaInventario, ahora: Date = new Date()): ResultadoSalida {
+/** Cuánto hay en total de un producto (en su unidad) en el inventario de un comedor. */
+function totalProducto(db: BD, comedorId: number, producto: string, unidad: string): number {
+  const f = db
+    .prepare('SELECT COALESCE(SUM(cantidad), 0) AS t FROM inventario_lotes WHERE comedor_id = ? AND LOWER(producto) = ? AND unidad = ?')
+    .get(comedorId, normal(producto), unidad) as { t: number };
+  return redondear3(Number(f.t));
+}
+
+/**
+ * Registra lo consumido de un producto y lo resta solo del stock, descontando primero el lote que vence antes (PEPS).
+ * Si el stock baja del mínimo (10) deja una notificación de alerta.
+ */
+export function registrarConsumo(db: BD, comedorId: number, c: ConsumoInventario, ahora: Date = new Date()): ResultadoConsumo {
   const comedor = nombreComedor(db, comedorId);
   const lotes = (
     db
@@ -105,15 +129,16 @@ export function registrarSalida(db: BD, comedorId: number, s: SalidaInventario, 
          WHERE comedor_id = ? AND LOWER(producto) = ? AND unidad = ? AND cantidad > 0
          ORDER BY (caduca_en IS NULL), caduca_en, id`,
       )
-      .all(comedorId, normal(s.producto), s.unidad) as Fila[]
+      .all(comedorId, normal(c.producto), c.unidad) as Fila[]
   ).map((f) => loteDe(f, ahora));
 
-  if (lotes.length === 0) throw new ErrorDeNegocio(`No hay "${s.producto}" en el inventario.`, 404);
-  const total = redondear3(lotes.reduce((suma, l) => suma + l.cantidad, 0));
-  if (s.cantidad > total) throw new ErrorDeNegocio(`Solo hay ${total} ${s.unidad} de "${s.producto}" en el inventario.`, 422);
+  if (lotes.length === 0) throw new ErrorDeNegocio(`No hay "${c.producto}" en el inventario.`, 404);
+  const nombre = lotes[0]!.producto;
+  const antes = redondear3(lotes.reduce((suma, l) => suma + l.cantidad, 0));
+  if (c.cantidad > antes) throw new ErrorDeNegocio(`Solo hay ${textoCantidad(antes, c.unidad, nombre)} de "${nombre}" en el inventario.`, 422);
 
-  const descontado: ResultadoSalida['descontado'] = [];
-  let restante = s.cantidad;
+  const descontado: ResultadoConsumo['descontado'] = [];
+  let restante = c.cantidad;
   for (const lote of lotes) {
     if (restante <= 0) break;
     const tomar = redondear3(Math.min(lote.cantidad, restante));
@@ -121,39 +146,38 @@ export function registrarSalida(db: BD, comedorId: number, s: SalidaInventario, 
     db.prepare('INSERT INTO inventario_movimientos (lote_id, comedor_id, tipo, cantidad, fecha, motivo, actor) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
       lote.id,
       comedorId,
-      s.tipo,
+      'consumo',
       tomar,
       ahora.toISOString(),
-      s.motivo ?? '',
+      c.motivo ?? '',
       comedor,
     );
     descontado.push({ loteId: lote.id, cantidad: tomar });
     restante = redondear3(restante - tomar);
   }
 
+  const quedan = totalProducto(db, comedorId, nombre, c.unidad);
   registrarEvento(db, {
     rol: 'comedor',
     actor: comedor,
-    accion: s.tipo === 'consumo' ? 'Consumo de inventario' : s.tipo === 'merma' ? 'Merma registrada' : 'Salida de inventario',
-    entidad: `KIT-${String(comedorId).padStart(4, '0')}`,
-    detalle: `${lotes[0]!.producto} · ${s.cantidad} ${s.unidad}${s.motivo ? ` · ${s.motivo}` : ''}`,
+    accion: 'Consumo de inventario',
+    entidad: codigoComedor(comedorId),
+    detalle: `−${textoCantidad(c.cantidad, c.unidad, nombre)} de ${nombre} · quedan ${textoCantidad(quedan, c.unidad, nombre)}${c.motivo ? ` · ${c.motivo}` : ''}`,
     fecha: ahora.toISOString(),
   });
-  return { descontado };
-}
 
-/** Define el stock mínimo de un producto; con 0 se elimina la alerta. */
-export function fijarMinimo(db: BD, comedorId: number, m: MinimoInventario): void {
-  nombreComedor(db, comedorId);
-  const producto = normal(m.producto);
-  if (m.minimo === 0) {
-    db.prepare('DELETE FROM inventario_minimos WHERE comedor_id = ? AND producto = ? AND unidad = ?').run(comedorId, producto, m.unidad);
-    return;
+  // Alerta automática al cruzar el mínimo hacia abajo.
+  if (antes >= STOCK_MINIMO && quedan < STOCK_MINIMO) {
+    registrarEvento(db, {
+      rol: 'sistema',
+      actor: 'Inventario',
+      accion: quedan === 0 ? 'Producto agotado' : 'Stock bajo',
+      entidad: codigoComedor(comedorId),
+      detalle: quedan === 0 ? `${nombre} se agotó (mínimo ${STOCK_MINIMO})` : `${nombre}: quedan ${textoCantidad(quedan, c.unidad, nombre)}, menos del mínimo de ${STOCK_MINIMO}`,
+      fecha: ahora.toISOString(),
+    });
   }
-  db.prepare(
-    `INSERT INTO inventario_minimos (comedor_id, producto, unidad, minimo) VALUES (?, ?, ?, ?)
-     ON CONFLICT (comedor_id, producto, unidad) DO UPDATE SET minimo = excluded.minimo`,
-  ).run(comedorId, producto, m.unidad, m.minimo);
+  return { descontado, quedan };
 }
 
 /** Inventario de un comedor: lotes (primero los que vencen antes), productos agregados y resumen. */
@@ -163,11 +187,6 @@ export function obtenerInventario(db: BD, comedorId: number, ahora: Date = new D
     db.prepare('SELECT * FROM inventario_lotes WHERE comedor_id = ? ORDER BY (caduca_en IS NULL), caduca_en, id').all(comedorId) as Fila[]
   ).map((f) => loteDe(f, ahora));
   const activos = todos.filter((l) => l.cantidad > 0);
-  const minimos = new Map(
-    (db.prepare('SELECT producto, unidad, minimo FROM inventario_minimos WHERE comedor_id = ?').all(comedorId) as { producto: string; unidad: string; minimo: number }[]).map(
-      (m) => [claveProducto(m.producto, m.unidad), Number(m.minimo)],
-    ),
-  );
 
   // Los productos se agrupan sobre todos los lotes, para que uno agotado siga apareciendo con stock 0.
   const grupos = new Map<string, LoteInventario[]>();
@@ -175,18 +194,17 @@ export function obtenerInventario(db: BD, comedorId: number, ahora: Date = new D
     const k = claveProducto(l.producto, l.unidad);
     grupos.set(k, [...(grupos.get(k) ?? []), l]);
   }
-  const productos: ProductoInventario[] = [...grupos.entries()].map(([k, lotes]) => {
+  const productos: ProductoInventario[] = [...grupos.values()].map((lotes) => {
     const conStock = lotes.filter((l) => l.cantidad > 0);
     const conFecha = conStock.filter((l) => l.caducaEn !== null).sort((a, b) => a.caducaEn!.localeCompare(b.caducaEn!));
     const total = redondear3(conStock.reduce((s, l) => s + l.cantidad, 0));
-    const minimo = minimos.get(k) ?? null;
     return {
       producto: lotes[0]!.producto,
       categoria: lotes[0]!.categoria,
       unidad: lotes[0]!.unidad,
       total,
-      minimo,
-      bajoMinimo: minimo !== null && total < minimo,
+      minimo: STOCK_MINIMO,
+      bajoMinimo: total < STOCK_MINIMO,
       proximaCaducidad: conFecha[0]?.caducaEn ?? null,
       nivelCaducidad: conFecha[0]?.nivelCaducidad ?? 'sin-fecha',
       lotes: conStock.length,
@@ -204,7 +222,7 @@ export function obtenerInventario(db: BD, comedorId: number, ahora: Date = new D
   return {
     comedorId,
     resumen: {
-      stockKg: redondear3(activos.filter((l) => l.nivelCaducidad !== 'vencido').reduce((s, l) => s + aKg(l.cantidad, l.unidad), 0)),
+      stockKg: redondear3(activos.filter((l) => l.nivelCaducidad !== 'vencido').reduce((s, l) => s + aKgProducto(l.cantidad, l.unidad, l.producto), 0)),
       lotes: activos.length,
       lotesPorVencer: activos.filter((l) => horas(l) > 0 && horas(l) <= HORAS_POR_VENCER).length,
       lotesVencidos: activos.filter((l) => l.nivelCaducidad === 'vencido').length,
@@ -220,7 +238,7 @@ export function stockKg(db: BD, comedorId: number, ahora: Date): number {
   return obtenerInventario(db, comedorId, ahora).resumen.stockKg;
 }
 
-/** Productos (en minúscula) que el comedor tiene por debajo de su mínimo. */
+/** Productos (en minúscula) que el comedor tiene por debajo del mínimo. */
 export function productosFaltantes(db: BD, comedorId: number, ahora: Date): Set<string> {
   return new Set(
     obtenerInventario(db, comedorId, ahora)
@@ -229,7 +247,7 @@ export function productosFaltantes(db: BD, comedorId: number, ahora: Date): Set<
   );
 }
 
-/** Vista de toda la red para la web de administración: excedentes, vencimientos y faltantes. */
+/** Vista de toda la red para la web de administración: vencimientos y faltantes. */
 export function inventarioCentral(db: BD, ahora: Date = new Date()): InventarioCentral {
   const comedores = db.prepare('SELECT id, nombre, activo FROM comedores ORDER BY id').all() as { id: number; nombre: string; activo: number }[];
   const porVencer: InventarioCentral['porVencer'] = [];
@@ -243,7 +261,7 @@ export function inventarioCentral(db: BD, ahora: Date = new Date()): InventarioC
       if (l.caducaEn && horasRestantes(l.caducaEn, ahora) <= HORAS_POR_VENCER) porVencer.push({ ...l, comedor: c.nombre });
     }
     for (const p of inv.productos) {
-      if (p.bajoMinimo && p.minimo !== null) bajoMinimo.push({ comedorId: c.id, comedor: c.nombre, producto: p.producto, unidad: p.unidad, total: p.total, minimo: p.minimo });
+      if (p.bajoMinimo) bajoMinimo.push({ comedorId: c.id, comedor: c.nombre, producto: p.producto, unidad: p.unidad, total: p.total, minimo: p.minimo });
     }
   }
   porVencer.sort((a, b) => (a.caducaEn ?? '').localeCompare(b.caducaEn ?? ''));

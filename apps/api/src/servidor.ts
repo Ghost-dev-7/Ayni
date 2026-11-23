@@ -1,13 +1,12 @@
 import cors from '@fastify/cors';
 import {
   activoInputSchema,
+  buscarEnCatalogo,
   borradorInputSchema,
   comedorInputSchema,
   comedorPerfilSchema,
-  entradaInventarioSchema,
-  minimoInventarioSchema,
+  consumoInventarioSchema,
   reasignarInputSchema,
-  salidaInventarioSchema,
   comercioInputSchema,
   donacionInputSchema,
   estadoDonacionSchema,
@@ -22,7 +21,7 @@ import { interpretarTexto } from './texto.ts';
 import { ofertasParaComedor, sugerirComedores } from './emparejamiento.ts';
 import { registrarEvento } from './eventos.ts';
 import { calcularImpacto } from './impacto.ts';
-import { fijarMinimo, inventarioCentral, obtenerInventario, registrarEntrada, registrarSalida } from './inventario.ts';
+import { inventarioCentral, obtenerInventario, registrarConsumo } from './inventario.ts';
 import {
   actualizarPerfilComedor,
   obtenerComedor,
@@ -37,6 +36,7 @@ import {
   listarComercios,
   listarDonaciones,
   listarEventos,
+  listarNotificacionesComedor,
   marcarVencidas,
   obtenerDonacion,
   recogerDonacion,
@@ -111,6 +111,17 @@ export function construirApi(db: BD, reloj: () => Date = () => new Date()): Fast
     if (!puedePublicar(datos.caducaEn, ahora)) {
       return reply.status(422).send({ error: 'No se puede publicar un producto ya vencido.' });
     }
+    // Cada producto del catálogo tiene una sola unidad en todo el sistema.
+    const ref = buscarEnCatalogo(datos.producto);
+    if (ref) {
+      if (ref.unidad !== datos.unidad) {
+        const como = ref.unidad === 'unidades' ? (ref.etiqueta ?? 'unidades') : ref.unidad;
+        return reply.status(422).send({ error: `${ref.nombre} se registra por ${como}, no por ${datos.unidad}.` });
+      }
+      datos.producto = ref.nombre;
+      datos.categoria = ref.categoria;
+      datos.requiereFrio = datos.requiereFrio || Boolean(ref.requiereFrio);
+    }
     const creada = crearDonacion(db, datos, ahora);
     // El sistema puntúa a los comedores y deja constancia de a quién sugiere primero.
     const mejor = sugerirComedores(db, creada, ahora).find((s) => s.elegible);
@@ -165,25 +176,16 @@ export function construirApi(db: BD, reloj: () => Date = () => new Date()): Fast
     return obtenerInventario(db, id, reloj());
   });
 
-  app.post('/api/comedores/:id/inventario/entradas', async (req, reply) => {
+  // El stock solo sube por una donación recogida y solo baja registrando lo consumido (se resta solo).
+  app.post('/api/comedores/:id/inventario/consumos', async (req) => {
     const id = Number((req.params as { id: string }).id);
-    const datos = entradaInventarioSchema.parse(req.body);
-    const ahora = reloj();
-    if (datos.caducaEn && !puedePublicar(datos.caducaEn, ahora)) {
-      return reply.status(422).send({ error: 'No se puede registrar un producto que ya venció.' });
-    }
-    return reply.status(201).send(registrarEntrada(db, id, datos, { origen: 'manual', ahora }));
+    return registrarConsumo(db, id, consumoInventarioSchema.parse(req.body), reloj());
   });
 
-  app.post('/api/comedores/:id/inventario/salidas', async (req) => {
+  app.get('/api/comedores/:id/notificaciones', async (req) => {
     const id = Number((req.params as { id: string }).id);
-    return registrarSalida(db, id, salidaInventarioSchema.parse(req.body), reloj());
-  });
-
-  app.put('/api/comedores/:id/inventario/minimos', async (req) => {
-    const id = Number((req.params as { id: string }).id);
-    fijarMinimo(db, id, minimoInventarioSchema.parse(req.body));
-    return obtenerInventario(db, id, reloj());
+    marcarVencidas(db, reloj());
+    return listarNotificacionesComedor(db, id);
   });
 
   app.get('/api/inventario', async () => inventarioCentral(db, reloj()));

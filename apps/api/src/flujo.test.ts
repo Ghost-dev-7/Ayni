@@ -21,7 +21,7 @@ describe('flujo publicar → reservar → recoger', () => {
         producto: 'Pan francés',
         categoria: 'panaderia',
         cantidad: 20,
-        unidad: 'kg',
+        unidad: 'unidades',
         caducaEn: enHoras(6),
         ventanaDesde: enHoras(0),
         ventanaHasta: enHoras(5),

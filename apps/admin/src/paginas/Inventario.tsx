@@ -53,7 +53,7 @@ export function Inventario() {
                         <tr key={l.id}>
                           <td className="wrap">{ICONO[l.categoria]} {l.producto}</td>
                           <td className="wrap">{l.comedor.replace('Comedor ', '')}</td>
-                          <td>{cantidadTexto(l.cantidad, l.unidad)}</td>
+                          <td>{cantidadTexto(l.cantidad, l.unidad, l.producto)}</td>
                           <td>{l.caducaEn && l.nivelCaducidad !== 'sin-fecha' ? <span className={`sem ${claseSemaforo(l.nivelCaducidad)}`}>{textoVence(l.caducaEn, ahora)}</span> : '—'}</td>
                         </tr>
                       ))}
@@ -72,8 +72,8 @@ export function Inventario() {
                         <tr key={`${b.comedorId}-${b.producto}-${b.unidad}`}>
                           <td className="wrap">{b.producto}</td>
                           <td className="wrap">{b.comedor.replace('Comedor ', '')}</td>
-                          <td style={{ color: 'var(--red)', fontWeight: 700 }}>{cantidadTexto(b.total, b.unidad)}</td>
-                          <td>{cantidadTexto(b.minimo, b.unidad)}</td>
+                          <td style={{ color: 'var(--red)', fontWeight: 700 }}>{cantidadTexto(b.total, b.unidad, b.producto)}</td>
+                          <td>{cantidadTexto(b.minimo, b.unidad, b.producto)}</td>
                         </tr>
                       ))}
                     </tbody>

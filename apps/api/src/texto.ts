@@ -7,7 +7,7 @@
  *
  * El borrador nunca se publica solo: el comercio lo revisa y lo confirma.
  */
-import type { BorradorDonacion, Categoria, Unidad } from '@ayni/shared';
+import { buscarEnCatalogo, type BorradorDonacion, type Categoria, type Unidad } from '@ayni/shared';
 
 interface EntradaDiccionario {
   claves: string[];
@@ -187,10 +187,16 @@ export function interpretarTexto(texto: string, ahora: Date = new Date()): Borra
   let requiereFrio = /\b(refrigerado|refrigerada|frio|fria|congelado|congelada|cadena de frio)\b/.test(t);
 
   if (entradaProducto) {
-    producto = entradaProducto.producto;
-    categoria = entradaProducto.categoria;
-    unidad = cant?.unidad ?? entradaProducto.unidad;
-    requiereFrio = requiereFrio || Boolean(entradaProducto.frio);
+    // El catálogo manda: cada producto tiene una sola unidad en todo el sistema.
+    const ref = buscarEnCatalogo(entradaProducto.producto);
+    producto = ref?.nombre ?? entradaProducto.producto;
+    categoria = ref?.categoria ?? entradaProducto.categoria;
+    unidad = ref?.unidad ?? entradaProducto.unidad;
+    requiereFrio = requiereFrio || Boolean(ref?.requiereFrio ?? entradaProducto.frio);
+    if (cant?.unidad && cant.unidad !== unidad) {
+      const como = unidad === 'unidades' ? (ref?.etiqueta ?? 'unidades') : unidad;
+      advertencias.push(`${producto} se registra por ${como}: puse ${cant.cantidad} ${como}. Revisa la cantidad.`);
+    }
   } else {
     // Producto desconocido: se toma lo que sigue a la cantidad como nombre y se avisa.
     const sobrante = (cant?.resto ?? t).replace(/\b(de|del|la|el|los|las|un|una|unos|unas|tengo|hay|quiero|donar|recojo|hasta|vence|caduca|manana|hoy|ayer)\b/g, ' ').replace(/\s+/g, ' ').trim();

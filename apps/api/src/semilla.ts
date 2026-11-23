@@ -1,14 +1,14 @@
 /**
  * Carga datos SINTÉTICOS (ficticios) en la base de datos.
- * Comercios, comedores y productos salen de data/synthetic/*.json.
+ * Comercios y comedores salen de data/synthetic/*.json; los productos, del catálogo compartido.
  * Las donaciones y el historial se generan de forma determinista a partir de la hora actual,
  * de modo que la demostración siempre muestra urgencias distintas.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { Categoria, Comedor, Comercio, EstadoDonacion, TipoComercio, Unidad } from '@ayni/shared';
+import { CATALOGO, type Categoria, type Comedor, type Comercio, type EstadoDonacion, type TipoComercio, type Unidad } from '@ayni/shared';
 import { abrirBD, vaciarBD, type BD } from './bd.ts';
-import { fijarMinimo, registrarEntrada } from './inventario.ts';
+import { registrarEntrada } from './inventario.ts';
 import { codigoDonacion, registrarEvento } from './repositorio.ts';
 
 const DIR_DATOS = resolve(import.meta.dirname, '../../../data/synthetic');
@@ -66,7 +66,7 @@ export function sembrar(db: BD, ahora: Date = new Date()): ResumenSemilla {
 
   const comerciosBase = leer<Omit<Comercio, 'id' | 'activo'>[]>('comercios.json');
   const comedoresBase = leer<Omit<Comedor, 'id'>[]>('comedores.json');
-  const productos = leer<ProductoBase[]>('productos.json');
+  const productos: ProductoBase[] = CATALOGO.map((p) => ({ nombre: p.nombre, categoria: p.categoria, unidad: p.unidad, frio: p.requiereFrio ?? false }));
 
   const insComercio = db.prepare('INSERT INTO comercios (nombre, tipo, direccion, lat, lng) VALUES (?, ?, ?, ?, ?)');
   for (const c of comerciosBase) insComercio.run(c.nombre, c.tipo, c.direccion, c.lat, c.lng);
@@ -149,7 +149,8 @@ export function sembrar(db: BD, ahora: Date = new Date()): ResumenSemilla {
     });
   });
 
-  // Inventario inicial de cada comedor: 6 productos con lotes de distinta caducidad y un mínimo.
+  // Inventario inicial de cada comedor: 6 productos con lotes de distinta caducidad.
+  // Alrededor de un tercio queda por debajo del mínimo (10), para que se vean las alertas.
   const DIAS_SECOS: Categoria[] = ['abarrotes', 'menestras', 'conservas'];
   for (const k of comedores) {
     const candidatos = productos.filter((p) => !p.frio || k.refrigeracion);
@@ -158,16 +159,13 @@ export function sembrar(db: BD, ahora: Date = new Date()): ResumenSemilla {
     for (const p of elegidos) {
       const secos = DIAS_SECOS.includes(p.categoria);
       const horas = secos ? azar.entero(90, 300) * 24 : p.categoria === 'panaderia' ? azar.entero(6, 40) : azar.entero(24, 8 * 24);
-      const cantidad = p.unidad === 'unidades' ? azar.entero(20, 120) : azar.entero(4, 70);
+      const cantidad = azar.siguiente() < 0.3 ? azar.entero(3, 9) : p.unidad === 'unidades' ? azar.entero(14, 120) : azar.entero(12, 70);
       registrarEntrada(
         db,
         k.id,
         { producto: p.nombre, categoria: p.categoria, unidad: p.unidad, cantidad, caducaEn: iso(t0 + horas * H) },
         { origen: 'manual', motivo: 'Inventario inicial', actor: k.nombre, ahora: new Date(t0 - azar.entero(1, 5) * DIA), sinEvento: true },
       );
-      // Un tercio de los productos queda por debajo de su mínimo, para mostrar las alertas.
-      const minimo = Math.max(1, Math.round(cantidad * (azar.siguiente() < 0.35 ? 1.6 : 0.5)));
-      fijarMinimo(db, k.id, { producto: p.nombre, unidad: p.unidad, minimo });
     }
   }
 

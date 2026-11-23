@@ -1,4 +1,4 @@
-import { CATEGORIAS, UNIDADES, type Categoria, type Unidad } from '@ayni/shared';
+import { CATALOGO, CATEGORIAS, UNIDADES, buscarEnCatalogo, etiquetaUnidad, type Categoria, type Unidad } from '@ayni/shared';
 import { useState, type FormEvent } from 'react';
 import { api, type DonacionN } from '../api.ts';
 import { Cabecera, Chip, Estado, Marco, nombreEstado, tonoEstado, type Pestana } from '../componentes.tsx';
@@ -86,7 +86,7 @@ function FilaDonacion({ d, ahora }: { d: DonacionN; ahora: Date }) {
       <div className="thumb" aria-hidden="true">{ICONO[d.categoria]}</div>
       <div className="grow">
         <b>{d.producto}</b>
-        <div className="small muted">{cantidadTexto(d.cantidad, d.unidad)} · {d.codigo}</div>
+        <div className="small muted">{cantidadTexto(d.cantidad, d.unidad, d.producto)} · {d.codigo}</div>
         <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
           {abierta && <span className={`sem ${claseSemaforo(d.nivelCaducidad)}`}>{textoVence(d.caducaEn, ahora)}</span>}
           <Chip tono={tonoEstado(d.estado)}>{nombreEstado(d.estado)}</Chip>
@@ -101,7 +101,7 @@ export function ComercioPublicar({ sesion }: { sesion: Sesion }) {
   const [producto, setProducto] = useState('');
   const [categoria, setCategoria] = useState<Categoria>('panaderia');
   const [cantidad, setCantidad] = useState('10');
-  const [unidad, setUnidad] = useState<Unidad>('kg');
+  const [unidad, setUnidad] = useState<Unidad>('unidades');
   const [caduca, setCaduca] = useState(aInputLocal(new Date(inicio.getTime() + 6 * 3_600_000)));
   const [hasta, setHasta] = useState(aInputLocal(new Date(inicio.getTime() + 5 * 3_600_000)));
   const [frio, setFrio] = useState(false);
@@ -110,6 +110,19 @@ export function ComercioPublicar({ sesion }: { sesion: Sesion }) {
   const [frase, setFrase] = useState('');
   const [creando, setCreando] = useState(false);
   const [avisos, setAvisos] = useState<string[] | null>(null);
+
+  // Si el producto está en el catálogo, su categoría y su unidad quedan fijas (una sola unidad por producto).
+  const ref = buscarEnCatalogo(producto);
+
+  const elegirProducto = (nombre: string) => {
+    setProducto(nombre);
+    const p = buscarEnCatalogo(nombre);
+    if (p) {
+      setCategoria(p.categoria);
+      setUnidad(p.unidad);
+      if (p.requiereFrio) setFrio(true);
+    }
+  };
 
   /** Convierte la frase en un borrador que rellena el formulario; el comercio lo revisa antes de publicar. */
   const crearBorrador = async () => {
@@ -167,7 +180,7 @@ export function ComercioPublicar({ sesion }: { sesion: Sesion }) {
         </div>
         <label className="field" style={{ marginTop: 8 }}>
           <span className="sr-only">Describe la donación</span>
-          <textarea className="input" value={frase} onChange={(e) => setFrase(e.target.value)} placeholder="Ej.: 20 kg de pan de ayer, recojo hasta las 6pm" />
+          <textarea className="input" value={frase} onChange={(e) => setFrase(e.target.value)} placeholder="Ej.: 20 panes de ayer, recojo hasta las 6pm" />
         </label>
         <button type="button" className="btn amber block" style={{ marginTop: 10 }} disabled={creando || frase.trim().length < 3} onClick={crearBorrador}>
           {creando ? 'Leyendo…' : 'Crear borrador'}
@@ -189,22 +202,30 @@ export function ComercioPublicar({ sesion }: { sesion: Sesion }) {
       <form className="stack" onSubmit={enviar}>
         <label className="field">
           <span>Producto</span>
-          <input className="input" value={producto} onChange={(e) => setProducto(e.target.value)} placeholder="Ej.: Pan francés" required minLength={2} />
+          <input className="input" list="catalogo-productos" value={producto} onChange={(e) => elegirProducto(e.target.value)} placeholder="Elige o escribe: Pan francés, Arroz…" required minLength={2} />
+          <datalist id="catalogo-productos">
+            {CATALOGO.map((p) => <option key={p.nombre} value={p.nombre} />)}
+          </datalist>
         </label>
+        {ref && (
+          <p className="hint" style={{ marginTop: -6 }}>
+            {ref.nombre} se registra por <b>{ref.unidad === 'unidades' ? (ref.etiqueta ?? 'unidades') : ref.unidad}</b>; la categoría y la unidad ya están puestas.
+          </p>
+        )}
         <label className="field">
           <span>Categoría</span>
-          <select className="input" value={categoria} onChange={(e) => setCategoria(e.target.value as Categoria)}>
+          <select className="input" value={categoria} disabled={Boolean(ref)} onChange={(e) => setCategoria(e.target.value as Categoria)}>
             {CATEGORIAS.map((c) => <option key={c} value={c}>{ICONO[c]} {NOMBRE_CATEGORIA[c]}</option>)}
           </select>
         </label>
         <div className="row">
           <label className="field grow">
-            <span>Cantidad</span>
-            <input className="input" type="number" min="0.1" step="0.1" value={cantidad} onChange={(e) => setCantidad(e.target.value)} required />
+            <span>Cantidad ({ref ? etiquetaUnidad(ref.nombre, ref.unidad) : unidad})</span>
+            <input className="input" type="number" min={unidad === 'unidades' ? '1' : '0.1'} step={unidad === 'unidades' ? '1' : '0.1'} value={cantidad} onChange={(e) => setCantidad(e.target.value)} required />
           </label>
           <label className="field grow">
             <span>Unidad</span>
-            <select className="input" value={unidad} onChange={(e) => setUnidad(e.target.value as Unidad)}>
+            <select className="input" value={unidad} disabled={Boolean(ref)} onChange={(e) => setUnidad(e.target.value as Unidad)}>
               {UNIDADES.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
           </label>
@@ -218,7 +239,7 @@ export function ComercioPublicar({ sesion }: { sesion: Sesion }) {
           <input className="input" type="datetime-local" value={hasta} onChange={(e) => setHasta(e.target.value)} required />
         </label>
         <div className="checks">
-          <label><input type="checkbox" checked={frio} onChange={(e) => setFrio(e.target.checked)} /> Requiere refrigeración</label>
+          <label><input type="checkbox" checked={frio} disabled={Boolean(ref?.requiereFrio)} onChange={(e) => setFrio(e.target.checked)} /> Requiere refrigeración{ref?.requiereFrio ? ' (siempre, para este producto)' : ''}</label>
         </div>
         <div className="why">
           <b className="small">🛡️ Seguridad alimentaria</b>
@@ -250,7 +271,7 @@ export function ComercioDonacion({ id }: { id: number }) {
               <div className="card row">
                 <div className="thumb" aria-hidden="true">{ICONO[d.categoria]}</div>
                 <div className="grow">
-                  <h2 style={{ fontSize: 19 }}>{d.producto} · {cantidadTexto(d.cantidad, d.unidad)}</h2>
+                  <h2 style={{ fontSize: 19 }}>{d.producto} · {cantidadTexto(d.cantidad, d.unidad, d.producto)}</h2>
                   <div className="small muted">{d.codigo}</div>
                   {abierta && <span className={`sem ${claseSemaforo(d.nivelCaducidad)}`}>{textoVence(d.caducaEn, ahora)} · {hora(d.caducaEn)}</span>}
                 </div>
@@ -273,7 +294,7 @@ export function ComercioDonacion({ id }: { id: number }) {
                   <li className={d.recogidaEn ? '' : 'todo'}>
                     <b className={d.recogidaEn ? '' : 'muted'}>Recogida</b>
                     <div className="small muted">
-                      {d.recogidaEn && d.cantidadRecibida !== null ? `${fechaHora(d.recogidaEn)} · ${cantidadTexto(d.cantidadRecibida, d.unidad)} recibidos` : `Pendiente · hasta las ${hora(d.ventanaHasta)}`}
+                      {d.recogidaEn && d.cantidadRecibida !== null ? `${fechaHora(d.recogidaEn)} · ${cantidadTexto(d.cantidadRecibida, d.unidad, d.producto)} recibidos` : `Pendiente · hasta las ${hora(d.ventanaHasta)}`}
                     </div>
                   </li>
                 ) : null}

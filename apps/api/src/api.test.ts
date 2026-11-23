@@ -22,7 +22,7 @@ describe('API', () => {
     producto: 'Pan francés',
     categoria: 'panaderia',
     cantidad: 20,
-    unidad: 'kg',
+    unidad: 'unidades',
     caducaEn: enHoras(5),
     ventanaDesde: enHoras(0),
     ventanaHasta: enHoras(4),

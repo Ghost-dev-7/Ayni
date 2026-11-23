@@ -3,15 +3,13 @@ import type {
   Comedor,
   ComedorPerfil,
   Comercio,
+  ConsumoInventario,
   Donacion,
   DonacionInput,
-  EntradaInventario,
+  EventoRegistro,
   InventarioComedor,
-  LoteInventario,
-  MinimoInventario,
   RecogerInput,
   ReservarInput,
-  SalidaInventario,
   Sugerencia,
 } from '@ayni/shared';
 
@@ -56,7 +54,7 @@ export const api = {
   sugerencias: (donacionId: number) => pedir<Sugerencia[]>(`/donaciones/${donacionId}/sugerencias`),
   perfil: (comedorId: number, d: ComedorPerfil) => pedir<Comedor>(`/comedores/${comedorId}/perfil`, { metodo: 'PUT', cuerpo: d }),
   inventario: (comedorId: number) => pedir<InventarioComedor>(`/comedores/${comedorId}/inventario`),
-  entrada: (comedorId: number, d: EntradaInventario) => pedir<LoteInventario>(`/comedores/${comedorId}/inventario/entradas`, { metodo: 'POST', cuerpo: d }),
-  salida: (comedorId: number, d: SalidaInventario) => pedir<{ descontado: { loteId: number; cantidad: number }[] }>(`/comedores/${comedorId}/inventario/salidas`, { metodo: 'POST', cuerpo: d }),
-  minimo: (comedorId: number, d: MinimoInventario) => pedir<InventarioComedor>(`/comedores/${comedorId}/inventario/minimos`, { metodo: 'PUT', cuerpo: d }),
+  consumo: (comedorId: number, d: ConsumoInventario) =>
+    pedir<{ descontado: { loteId: number; cantidad: number }[]; quedan: number }>(`/comedores/${comedorId}/inventario/consumos`, { metodo: 'POST', cuerpo: d }),
+  notificaciones: (comedorId: number) => pedir<EventoRegistro[]>(`/comedores/${comedorId}/notificaciones`),
 };

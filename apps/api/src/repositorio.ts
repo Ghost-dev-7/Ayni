@@ -330,6 +330,21 @@ export function listarEventos(db: BD, filtro: FiltroEventos = {}): EventoRegistr
   return (db.prepare(sql).all(...valores, filtro.limite ?? 100) as Fila[]).map(eventoDe);
 }
 
+/**
+ * Notificaciones de un comedor: lo que reservó o recogió, lo que entró a su inventario, lo que consumió
+ * y las alertas de stock bajo. Salen del registro de eventos, de lo más nuevo a lo más viejo.
+ */
+export function listarNotificacionesComedor(db: BD, comedorId: number, limite = 60): EventoRegistro[] {
+  const comedor = obtenerComedor(db, comedorId);
+  if (!comedor) throw new ErrorDeNegocio('El comedor no existe.', 404);
+  const codigo = `KIT-${String(comedorId).padStart(4, '0')}`;
+  const sql = `SELECT * FROM eventos
+               WHERE (entidad = ? AND accion IN ('Entró al inventario', 'Consumo de inventario', 'Stock bajo', 'Producto agotado'))
+                  OR (rol = 'comedor' AND actor = ? AND accion IN ('Reservada', 'Recogida confirmada'))
+               ORDER BY fecha DESC, id DESC LIMIT ?`;
+  return (db.prepare(sql).all(codigo, comedor.nombre, limite) as Fila[]).map(eventoDe);
+}
+
 /** Acciones distintas que existen en el registro (para el filtro de la web de administración). */
 export function listarAccionesEventos(db: BD): string[] {
   return (db.prepare('SELECT DISTINCT accion FROM eventos ORDER BY accion').all() as { accion: string }[]).map((f) => f.accion);

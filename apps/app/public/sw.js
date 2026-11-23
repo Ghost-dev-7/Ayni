@@ -1,5 +1,5 @@
 /* Service worker de Ayni: la app se abre sin conexión y muestra lo último que vio. */
-const VERSION = 'ayni-v1';
+const VERSION = 'ayni-v2';
 const ARCHIVOS_BASE = ['/', '/icono.svg', '/icono-192.png', '/icono-512.png', '/logo.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (evento) => {

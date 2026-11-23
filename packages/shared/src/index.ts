@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export * from './catalogo.ts';
+
 export const CATEGORIAS = [
   'panaderia',
   'verduras',
@@ -171,10 +173,6 @@ export type ComedorPerfil = z.infer<typeof comedorPerfilSchema>;
 /** Una persona del equipo administrador asigna una donación a un comedor concreto. */
 export const reasignarInputSchema = z.object({ comedorId: z.number().int().positive() });
 
-export const TIPOS_SALIDA = ['consumo', 'merma', 'salida'] as const;
-export const tipoSalidaSchema = z.enum(TIPOS_SALIDA);
-export type TipoSalida = z.infer<typeof tipoSalidaSchema>;
-
 /** Entrada manual de un lote al inventario de un comedor. */
 export const entradaInventarioSchema = z.object({
   producto: z.string().trim().min(2).max(80),
@@ -186,22 +184,14 @@ export const entradaInventarioSchema = z.object({
 });
 export type EntradaInventario = z.infer<typeof entradaInventarioSchema>;
 
-/** Consumo, merma o salida de un producto: se descuenta primero lo que vence antes (PEPS). */
-export const salidaInventarioSchema = z.object({
+/** Lo consumido de un producto: el stock se descuenta solo, primero lo que vence antes (PEPS). */
+export const consumoInventarioSchema = z.object({
   producto: z.string().trim().min(2).max(80),
   unidad: unidadSchema,
-  tipo: tipoSalidaSchema,
   cantidad: z.number().positive().max(100000),
   motivo: z.string().trim().max(120).optional(),
 });
-export type SalidaInventario = z.infer<typeof salidaInventarioSchema>;
-
-export const minimoInventarioSchema = z.object({
-  producto: z.string().trim().min(2).max(80),
-  unidad: unidadSchema,
-  minimo: z.number().min(0).max(100000),
-});
-export type MinimoInventario = z.infer<typeof minimoInventarioSchema>;
+export type ConsumoInventario = z.infer<typeof consumoInventarioSchema>;
 
 export interface LoteInventario {
   id: number;
@@ -223,7 +213,8 @@ export interface ProductoInventario {
   categoria: Categoria;
   unidad: Unidad;
   total: number;
-  minimo: number | null;
+  /** Siempre STOCK_MINIMO (10): no se edita. */
+  minimo: number;
   bajoMinimo: boolean;
   proximaCaducidad: string | null;
   nivelCaducidad: LoteInventario['nivelCaducidad'];

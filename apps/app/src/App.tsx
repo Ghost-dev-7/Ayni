@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
-import { ComedorDonacion, ComedorOfertas, ComedorReservas } from './pantallas/comedor.tsx';
+import { ComedorDonacion, ComedorOfertas } from './pantallas/comedor.tsx';
 import { ComercioDonacion, ComercioInicio, ComercioPublicar } from './pantallas/comercio.tsx';
 import { ComedorInventario } from './pantallas/inventario.tsx';
-import { ComedorPerfil } from './pantallas/perfil.tsx';
+import { ComedorNotificaciones } from './pantallas/notificaciones.tsx';
 import { Rol } from './pantallas/Rol.tsx';
 import { ir, leerSesion, useRuta } from './sesion.ts';
 
@@ -30,11 +30,10 @@ export function App() {
   }
 
   if (zona === 'comedor') {
-    if (seccion === 'reservas') return <ComedorReservas sesion={sesion} />;
+    if (seccion === 'notificaciones') return <ComedorNotificaciones sesion={sesion} />;
     if (seccion === 'inventario') return <ComedorInventario sesion={sesion} />;
-    if (seccion === 'perfil') return <ComedorPerfil sesion={sesion} />;
     if (seccion === 'donacion' && param) return <ComedorDonacion sesion={sesion} id={Number(param)} />;
-    return <ComedorOfertas sesion={sesion} />;
+    return <ComedorOfertas sesion={sesion} />; // también recibe las rutas viejas (reservas, perfil)
   }
 
   return <Rol />;

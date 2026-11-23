@@ -22,11 +22,12 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
 
 - **App web (móvil primero, instalable como PWA)** para comercios y comedores:
   - El **comercio** publica un producto por vencer (producto, cantidad, caducidad, ventana de recojo) y sigue su estado.
-  - El comercio también puede **escribirlo con sus palabras** ("20 kg de pan de ayer, recojo hasta las 6pm"): un analizador por reglas, sin IA externa, rellena el formulario y avisa de lo que no entendió. Siempre se revisa antes de publicar.
-  - El **comedor** ve las donaciones disponibles ordenadas por un **puntaje de 0 a 100** y puede ver **por qué** se le sugiere cada una. Las **reserva**.
-  - El comedor **confirma la recogida** (estado del producto y cantidad recibida) y lo recogido **entra solo a su inventario**.
-  - El comedor gestiona su **inventario**: lotes con caducidad, entradas, consumo, mermas y stock mínimo con alertas. Al consumir se descuenta primero lo que vence antes (PEPS).
-  - El comedor declara sus **necesidades** (categorías prioritarias, raciones, refrigeración), y eso cambia el puntaje de sus ofertas.
+  - El comercio también puede **escribirlo con sus palabras** ("20 panes de ayer, recojo hasta las 6pm"): un analizador por reglas, sin IA externa, rellena el formulario y avisa de lo que no entendió. Siempre se revisa antes de publicar.
+  - **Una sola unidad por producto** en todo el sistema: el azúcar, el arroz, los frejoles, las lentejas, la harina, las papas, los tomates, las verduras y las carnes van por **kg**; la leche fresca y el aceite por **litros**; todo lo demás por **unidades** (panes, latas de atún, paquetes de fideos, bolsas de pan de molde). Así lo donado entra al inventario sin conversiones.
+  - El **comedor** elige en **Ofertas** lo que busca (categorías) y ve las donaciones ordenadas por un **puntaje de 0 a 100**, con el **porqué** de cada una. Las **reserva**.
+  - El comedor **confirma la recogida** desde **Notificaciones** (estado del producto y cantidad recibida) y lo recogido **entra solo a su inventario**.
+  - **Notificaciones** reúne, y se actualiza sola: lo que hay por recoger, las alertas del inventario (stock bajo, productos por vencer) y el historial de lo reservado, recogido, ingresado y consumido.
+  - **Inventario** del comedor: el stock no se escribe a mano. Sube solo al recoger una donación y baja solo al registrar lo **consumido**, descontando primero lo que vence antes (PEPS). El **mínimo es 10** de la unidad de cada producto y, por debajo, se marca en rojo y avisa.
 - **Web de administración** (escritorio) para el equipo que opera la plataforma:
   - **Panel de monitoreo e impacto** en vivo: kg rescatados, raciones equivalentes, comedores atendidos, % recogido antes de vencer, tiempo medio y alertas.
   - **Registro de eventos** con filtros y el recorrido completo (trazabilidad) de cada donación.
@@ -52,7 +53,7 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
 - **Base de datos:** SQLite (`node:sqlite`, incluido en Node).
 - **App y web de administración:** React, Vite y TypeScript.
 - **Mapa:** Leaflet con teselas de OpenStreetMap (gratuito, sin clave).
-- **Pruebas:** `node:test` (87 pruebas de la API y las reglas del negocio).
+- **Pruebas:** `node:test` (102 pruebas de la API y las reglas del negocio).
 - **Monorepo** con npm workspaces: `apps/api`, `apps/app`, `apps/admin` y `packages/shared` (tipos y esquemas compartidos).
 
 ## Instalación y uso
@@ -99,12 +100,13 @@ data/synthetic  Datos ficticios de demostración
 
 ## Estado
 
-Prototipo funcional de extremo a extremo, desarrollado durante el evento y verificado instalándolo desde cero en una carpeta limpia (instalación, 87 pruebas, comprobación de tipos y compilación).
+Prototipo funcional de extremo a extremo, desarrollado durante el evento y verificado instalándolo desde cero en una carpeta limpia (instalación, pruebas, comprobación de tipos y compilación).
 
 Alcance del prototipo: no hay autenticación real (se elige un rol y una cuenta), no hay pagos ni logística de transporte, y todos los datos son ficticios.
 
 Los supuestos de la demostración son constantes del código y se pueden ajustar:
 
 - 1 ración ≈ 0,5 kg: `KG_POR_RACION`, en `packages/shared/src/index.ts`.
-- 1 unidad suelta ≈ 0,25 kg: `KG_POR_UNIDAD`, en `apps/api/src/medidas.ts`.
+- Peso aproximado de una unidad de cada producto (un pan ≈ 0,1 kg, una lata de atún ≈ 0,17 kg…), solo para convertir a kilos las cifras del panel de impacto: `pesoKgPorUnidad`, en `packages/shared/src/catalogo.ts`. Un producto sin peso definido cuenta 0,25 kg por unidad.
+- Stock mínimo de 10 por producto: `STOCK_MINIMO`, en `packages/shared/src/catalogo.ts`.
 - Capacidad de almacenar 7 días de consumo: `DIAS_DE_CAPACIDAD`, en `apps/api/src/emparejamiento.ts`.

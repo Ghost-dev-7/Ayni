@@ -1,4 +1,4 @@
-import type { Categoria } from '@ayni/shared';
+import { etiquetaUnidad, type Categoria, type Unidad } from '@ayni/shared';
 import type { NivelCaducidad } from './api.ts';
 
 export const ICONO: Record<Categoria, string> = {
@@ -61,4 +61,5 @@ export function aInputLocal(d: Date): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-export const cantidadTexto = (n: number, unidad: string) => `${Number.isInteger(n) ? n : n.toFixed(1)} ${unidad}`;
+export const cantidadTexto = (n: number, unidad: Unidad, producto?: string) =>
+  `${Number.isInteger(n) ? n : n.toFixed(1)} ${producto ? etiquetaUnidad(producto, unidad) : unidad}`;

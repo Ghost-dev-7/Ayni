@@ -21,7 +21,7 @@ describe('API de emparejamiento e inventario', () => {
       await app.inject({
         method: 'POST',
         url: '/api/donaciones',
-        payload: { comercioId: 1, producto: 'Pan francés', categoria: 'panaderia', cantidad: 20, unidad: 'kg', caducaEn: enHoras(4), ventanaDesde: enHoras(0), ventanaHasta: enHoras(3), requiereFrio: false, ...extra },
+        payload: { comercioId: 1, producto: 'Pan francés', categoria: 'panaderia', cantidad: 20, unidad: 'unidades', caducaEn: enHoras(4), ventanaDesde: enHoras(0), ventanaHasta: enHoras(3), requiereFrio: false, ...extra },
       })
     ).json() as { id: number; codigo: string };
 
@@ -87,38 +87,88 @@ describe('API de emparejamiento e inventario', () => {
     assert.ok(acciones.includes('Reasignada'));
   });
 
-  it('recoger una donación suma al inventario y consumir lo descuenta', async () => {
-    const { id } = await publicar({ producto: 'Pan de prueba' });
+  it('recoger una donación suma al inventario solo y registrar lo consumido lo resta solo', async () => {
+    const { id } = await publicar({ producto: 'Pan de prueba', unidad: 'kg' });
     await app.inject({ method: 'POST', url: `/api/donaciones/${id}/reservar`, payload: { comedorId: 1, reservadoPor: 'Rosa M.' } });
     await app.inject({ method: 'POST', url: `/api/donaciones/${id}/recoger`, payload: { comedorId: 1, recogidoPor: 'Rosa M.', cantidadRecibida: 20, estadoOk: true } });
-    let inv = (await app.inject({ url: '/api/comedores/1/inventario' })).json() as { productos: { producto: string; total: number }[] };
+    let inv = (await app.inject({ url: '/api/comedores/1/inventario' })).json() as { productos: { producto: string; total: number; minimo: number }[] };
     assert.equal(inv.productos.find((p) => p.producto === 'Pan de prueba')?.total, 20);
+    assert.equal(inv.productos.find((p) => p.producto === 'Pan de prueba')?.minimo, 10);
 
-    const salida = await app.inject({ method: 'POST', url: '/api/comedores/1/inventario/salidas', payload: { producto: 'Pan de prueba', unidad: 'kg', tipo: 'consumo', cantidad: 8, motivo: 'Almuerzo' } });
-    assert.equal(salida.statusCode, 200);
+    const consumo = await app.inject({ method: 'POST', url: '/api/comedores/1/inventario/consumos', payload: { producto: 'Pan de prueba', unidad: 'kg', cantidad: 8, motivo: 'Almuerzo' } });
+    assert.equal(consumo.statusCode, 200);
+    assert.equal(consumo.json().quedan, 12);
     inv = (await app.inject({ url: '/api/comedores/1/inventario' })).json();
     assert.equal(inv.productos.find((p) => p.producto === 'Pan de prueba')?.total, 12);
   });
 
-  it('valida las entradas y salidas manuales del inventario', async () => {
-    const vencida = await app.inject({ method: 'POST', url: '/api/comedores/1/inventario/entradas', payload: { producto: 'Leche', categoria: 'lacteos', unidad: 'litros', cantidad: 5, caducaEn: enHoras(-2) } });
-    assert.equal(vencida.statusCode, 422);
-    const ok = await app.inject({ method: 'POST', url: '/api/comedores/1/inventario/entradas', payload: { producto: 'Aceite', categoria: 'abarrotes', unidad: 'litros', cantidad: 5 } });
-    assert.equal(ok.statusCode, 201);
-    const demas = await app.inject({ method: 'POST', url: '/api/comedores/1/inventario/salidas', payload: { producto: 'Aceite', unidad: 'litros', tipo: 'merma', cantidad: 50 } });
+  it('el inventario ya no admite cargas manuales ni cambiar el mínimo', async () => {
+    const entrada = await app.inject({ method: 'POST', url: '/api/comedores/1/inventario/entradas', payload: { producto: 'Aceite', categoria: 'abarrotes', unidad: 'litros', cantidad: 5 } });
+    assert.equal(entrada.statusCode, 404);
+    const minimo = await app.inject({ method: 'PUT', url: '/api/comedores/1/inventario/minimos', payload: { producto: 'Arroz', unidad: 'kg', minimo: 3 } });
+    assert.equal(minimo.statusCode, 404);
+  });
+
+  it('valida el consumo: no se puede consumir más de lo que hay ni sin datos', async () => {
+    const inv = (await app.inject({ url: '/api/comedores/1/inventario' })).json() as { productos: { producto: string; unidad: string; total: number }[] };
+    const p = inv.productos.find((x) => x.total > 0)!;
+    const demas = await app.inject({ method: 'POST', url: '/api/comedores/1/inventario/consumos', payload: { producto: p.producto, unidad: p.unidad, cantidad: p.total + 1 } });
     assert.equal(demas.statusCode, 422);
-    const malo = await app.inject({ method: 'POST', url: '/api/comedores/1/inventario/salidas', payload: { producto: 'Aceite', unidad: 'litros', tipo: 'regalo', cantidad: 1 } });
-    assert.equal(malo.statusCode, 400);
+    const sinCantidad = await app.inject({ method: 'POST', url: '/api/comedores/1/inventario/consumos', payload: { producto: p.producto, unidad: p.unidad } });
+    assert.equal(sinCantidad.statusCode, 400);
+    const noExiste = await app.inject({ method: 'POST', url: '/api/comedores/1/inventario/consumos', payload: { producto: 'Producto inexistente', unidad: 'kg', cantidad: 1 } });
+    assert.equal(noExiste.statusCode, 404);
+  });
+
+  it('las notificaciones del comedor reúnen reserva, recogida, inventario y alertas de stock bajo', async () => {
+    const { id } = await publicar({ producto: 'Arroz', categoria: 'abarrotes', cantidad: 12, unidad: 'kg' });
+    await app.inject({ method: 'POST', url: `/api/donaciones/${id}/reservar`, payload: { comedorId: 3, reservadoPor: 'Rosa M.' } });
+    await app.inject({ method: 'POST', url: `/api/donaciones/${id}/recoger`, payload: { comedorId: 3, recogidoPor: 'Rosa M.', cantidadRecibida: 12, estadoOk: true } });
+    await app.inject({ method: 'POST', url: '/api/comedores/3/inventario/consumos', payload: { producto: 'Arroz', unidad: 'kg', cantidad: 12 } });
+    const r = await app.inject({ url: '/api/comedores/3/notificaciones' });
+    assert.equal(r.statusCode, 200);
+    const acciones = (r.json() as { accion: string }[]).map((n) => n.accion);
+    for (const esperada of ['Reservada', 'Recogida confirmada', 'Entró al inventario', 'Consumo de inventario']) {
+      assert.ok(acciones.includes(esperada), `falta "${esperada}"`);
+    }
+    assert.equal((await app.inject({ url: '/api/comedores/999/notificaciones' })).statusCode, 404);
+  });
+
+  it('cada producto del catálogo se publica en su unidad: pan por unidades, no por kg', async () => {
+    const mal = await app.inject({
+      method: 'POST',
+      url: '/api/donaciones',
+      payload: { comercioId: 1, producto: 'Pan francés', categoria: 'panaderia', cantidad: 20, unidad: 'kg', caducaEn: enHoras(4), ventanaDesde: enHoras(0), ventanaHasta: enHoras(3), requiereFrio: false },
+    });
+    assert.equal(mal.statusCode, 422);
+    assert.match(mal.json().error, /se registra por unidades/);
+    const fideos = await app.inject({
+      method: 'POST',
+      url: '/api/donaciones',
+      payload: { comercioId: 1, producto: 'fideos', categoria: 'abarrotes', cantidad: 30, unidad: 'unidades', caducaEn: enHoras(4), ventanaDesde: enHoras(0), ventanaHasta: enHoras(3), requiereFrio: false },
+    });
+    assert.equal(fideos.statusCode, 201);
+    assert.equal(fideos.json().producto, 'Fideos'); // se guarda con el nombre del catálogo
+  });
+
+  it('un producto que requiere frío en el catálogo queda marcado aunque el comercio no lo marque', async () => {
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/donaciones',
+      payload: { comercioId: 1, producto: 'Yogures', categoria: 'lacteos', cantidad: 40, unidad: 'unidades', caducaEn: enHoras(10), ventanaDesde: enHoras(0), ventanaHasta: enHoras(8), requiereFrio: false },
+    });
+    assert.equal(r.statusCode, 201);
+    assert.equal(r.json().requiereFrio, true);
   });
 
   it('crea un borrador desde texto libre sin publicar nada', async () => {
     const antes = ((await app.inject({ url: '/api/donaciones' })).json() as unknown[]).length;
-    const r = await app.inject({ method: 'POST', url: '/api/donaciones/borrador', payload: { texto: '20 kg de pan de ayer, recojo hasta las 6pm' } });
+    const r = await app.inject({ method: 'POST', url: '/api/donaciones/borrador', payload: { texto: '20 panes de ayer, recojo hasta las 6pm' } });
     assert.equal(r.statusCode, 200);
     const b = r.json();
     assert.equal(b.producto, 'Pan francés');
     assert.equal(b.cantidad, 20);
-    assert.equal(b.unidad, 'kg');
+    assert.equal(b.unidad, 'unidades');
     assert.equal(((await app.inject({ url: '/api/donaciones' })).json() as unknown[]).length, antes);
     assert.equal((await app.inject({ method: 'POST', url: '/api/donaciones/borrador', payload: { texto: ' ' } })).statusCode, 400);
   });

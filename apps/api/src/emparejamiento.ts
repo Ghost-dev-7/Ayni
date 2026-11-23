@@ -9,6 +9,7 @@
 import {
   KG_POR_RACION,
   PESOS_PUNTAJE,
+  aKgProducto,
   type Comedor,
   type Comercio,
   type ComponentesPuntaje,
@@ -18,7 +19,6 @@ import {
 import type { BD } from './bd.ts';
 import { horasRestantes, urgencia } from './caducidad.ts';
 import { productosFaltantes, stockKg } from './inventario.ts';
-import { aKg } from './medidas.ts';
 import { listarComedores, obtenerComercio } from './repositorio.ts';
 
 /** A partir de esta distancia, la cercanía vale 0. */
@@ -67,7 +67,7 @@ const nombreKm = (km: number) => `${km.toFixed(1).replace('.', ',')} km`;
 export function puntuar(e: EntradaPuntaje): Sugerencia {
   const { donacion: d, comedor: c, ahora } = e;
   const km = distanciaKm(c, e.comercio);
-  const kg = aKg(d.cantidad, d.unidad);
+  const kg = aKgProducto(d.cantidad, d.unidad, d.producto);
   const espacio = espacioDisponibleKg(c, e.stockActualKg);
   const declarada = c.necesidades.includes(d.categoria);
 
@@ -85,7 +85,7 @@ export function puntuar(e: EntradaPuntaje): Sugerencia {
     declarada
       ? 'Necesidad 100: es una categoría prioritaria para el comedor.'
       : e.leFaltaElProducto
-        ? 'Necesidad 70: al comedor le falta este producto en su inventario.'
+        ? 'Necesidad 70: al comedor le queda poco de este producto (menos de 10).'
         : 'Necesidad 0: no es una categoría que el comedor haya declarado como prioritaria.',
     espacio >= kg
       ? `Capacidad ${componentes.capacidad}: tiene espacio para ${Math.round(espacio)} kg y la donación pesa ${Math.round(kg)} kg.`

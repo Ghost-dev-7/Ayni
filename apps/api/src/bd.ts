@@ -89,20 +89,14 @@ CREATE TABLE IF NOT EXISTS inventario_movimientos (
   motivo TEXT NOT NULL DEFAULT '',
   actor TEXT NOT NULL DEFAULT ''
 );
-
-CREATE TABLE IF NOT EXISTS inventario_minimos (
-  comedor_id INTEGER NOT NULL REFERENCES comedores(id),
-  producto TEXT NOT NULL,
-  unidad TEXT NOT NULL,
-  minimo REAL NOT NULL CHECK (minimo >= 0),
-  PRIMARY KEY (comedor_id, producto, unidad)
-);
 `;
 
-const TABLAS = ['inventario_movimientos', 'inventario_lotes', 'inventario_minimos', 'eventos', 'donaciones', 'comedores', 'comercios'];
+const TABLAS = ['inventario_movimientos', 'inventario_lotes', 'eventos', 'donaciones', 'comedores', 'comercios'];
+// "inventario_minimos" ya no existe (el mínimo es fijo), pero se borra si una base antigua la tiene.
+const TABLAS_AL_RECREAR = [...TABLAS, 'inventario_minimos'];
 
 /** Versión del esquema. Si la base local es más antigua se recrea (solo contiene datos sintéticos). */
-const VERSION_ESQUEMA = 3;
+const VERSION_ESQUEMA = 4;
 
 /** Abre la base de datos SQLite (archivo, o ":memory:" para pruebas) y crea el esquema. */
 export function abrirBD(ruta: string = process.env.DB_PATH ?? resolve(import.meta.dirname, '../data/ayni.db')): BD {
@@ -113,7 +107,7 @@ export function abrirBD(ruta: string = process.env.DB_PATH ?? resolve(import.met
   const version = Number((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version);
   if (version < VERSION_ESQUEMA) {
     db.exec('PRAGMA foreign_keys = OFF;');
-    for (const t of TABLAS) db.exec(`DROP TABLE IF EXISTS ${t};`);
+    for (const t of TABLAS_AL_RECREAR) db.exec(`DROP TABLE IF EXISTS ${t};`);
     db.exec('PRAGMA foreign_keys = ON;');
   }
   db.exec(ESQUEMA);
