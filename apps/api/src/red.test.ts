@@ -16,6 +16,13 @@ describe('API de emparejamiento e inventario', () => {
     app = construirApi(db, () => AHORA);
   });
 
+  /** Reserva (el comedor) y recoge presentando el token del QR del comercio. */
+  const recogerConQR = async (id: number, comedorId: number, cantidadRecibida: number) => {
+    await app.inject({ method: 'POST', url: `/api/donaciones/${id}/reservar`, payload: { comedorId, reservadoPor: 'Rosa M.' } });
+    const { token } = (await app.inject({ url: `/api/donaciones/${id}/entrega?comercioId=1` })).json() as { token: string };
+    return app.inject({ method: 'POST', url: `/api/donaciones/${id}/recoger`, payload: { comedorId, recogidoPor: 'Rosa M.', cantidadRecibida, estadoOk: true, token } });
+  };
+
   const publicar = async (extra: Record<string, unknown> = {}) =>
     (
       await app.inject({
@@ -89,8 +96,7 @@ describe('API de emparejamiento e inventario', () => {
 
   it('recoger una donación suma al inventario solo y registrar lo consumido lo resta solo', async () => {
     const { id } = await publicar({ producto: 'Pan de prueba', unidad: 'kg' });
-    await app.inject({ method: 'POST', url: `/api/donaciones/${id}/reservar`, payload: { comedorId: 1, reservadoPor: 'Rosa M.' } });
-    await app.inject({ method: 'POST', url: `/api/donaciones/${id}/recoger`, payload: { comedorId: 1, recogidoPor: 'Rosa M.', cantidadRecibida: 20, estadoOk: true } });
+    await recogerConQR(id, 1, 20);
     let inv = (await app.inject({ url: '/api/comedores/1/inventario' })).json() as { productos: { producto: string; total: number; minimo: number }[] };
     assert.equal(inv.productos.find((p) => p.producto === 'Pan de prueba')?.total, 20);
     assert.equal(inv.productos.find((p) => p.producto === 'Pan de prueba')?.minimo, 10);
@@ -122,8 +128,7 @@ describe('API de emparejamiento e inventario', () => {
 
   it('las notificaciones del comedor reúnen reserva, recogida, inventario y alertas de stock bajo', async () => {
     const { id } = await publicar({ producto: 'Arroz', categoria: 'abarrotes', cantidad: 12, unidad: 'kg' });
-    await app.inject({ method: 'POST', url: `/api/donaciones/${id}/reservar`, payload: { comedorId: 3, reservadoPor: 'Rosa M.' } });
-    await app.inject({ method: 'POST', url: `/api/donaciones/${id}/recoger`, payload: { comedorId: 3, recogidoPor: 'Rosa M.', cantidadRecibida: 12, estadoOk: true } });
+    await recogerConQR(id, 3, 12);
     await app.inject({ method: 'POST', url: '/api/comedores/3/inventario/consumos', payload: { producto: 'Arroz', unidad: 'kg', cantidad: 12 } });
     const r = await app.inject({ url: '/api/comedores/3/notificaciones' });
     assert.equal(r.statusCode, 200);
@@ -171,8 +176,7 @@ describe('API de emparejamiento e inventario', () => {
     assert.match(decimal.json().detalles[0].mensaje, /números enteros/);
 
     const { id } = await publicar({ producto: 'Arroz', categoria: 'abarrotes', cantidad: 20, unidad: 'kg' });
-    await app.inject({ method: 'POST', url: `/api/donaciones/${id}/reservar`, payload: { comedorId: 1, reservadoPor: 'Rosa M.' } });
-    const recogida = await app.inject({ method: 'POST', url: `/api/donaciones/${id}/recoger`, payload: { comedorId: 1, recogidoPor: 'Rosa M.', cantidadRecibida: 7.5, estadoOk: true } });
+    const recogida = await recogerConQR(id, 1, 7.5);
     assert.equal(recogida.statusCode, 400);
 
     const consumo = await app.inject({ method: 'POST', url: '/api/comedores/1/inventario/consumos', payload: { producto: 'Cebollas', unidad: 'kg', cantidad: 1.5 } });

@@ -15,7 +15,7 @@ import {
   reservarInputSchema,
 } from '@ayni/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 import { abrirBD, type BD } from './bd.ts';
 import { cumpleVidaMinima, nivelCaducidad, puedePublicar } from './caducidad.ts';
 import { interpretarTexto } from './texto.ts';
@@ -39,8 +39,9 @@ import {
   listarEventos,
   listarNotificacionesComedor,
   marcarVencidas,
+  confirmarEntrega,
   obtenerDonacion,
-  recogerDonacion,
+  obtenerEntrega,
   reservarDonacion,
 } from './repositorio.ts';
 import { sembrar } from './semilla.ts';
@@ -97,9 +98,17 @@ export function construirApi(db: BD, reloj: () => Date = () => new Date()): Fast
     return reservarDonacion(db, id, reservarInputSchema.parse(req.body), reloj());
   });
 
+  // El comercio ve el QR (y su código de respaldo) de una entrega reservada. Con sesión simulada: se indica el comercio.
+  app.get('/api/donaciones/:id/entrega', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    const { comercioId } = z.object({ comercioId: z.coerce.number().int().positive() }).parse(req.query);
+    return obtenerEntrega(db, id, comercioId);
+  });
+
+  // La recogida solo se confirma si quien recoge presenta el QR (o el código) de esa entrega.
   app.post('/api/donaciones/:id/recoger', async (req) => {
     const id = Number((req.params as { id: string }).id);
-    return recogerDonacion(db, id, recogerInputSchema.parse(req.body), reloj());
+    return confirmarEntrega(db, id, recogerInputSchema.parse(req.body), reloj());
   });
 
   app.post('/api/donaciones', async (req, reply) => {

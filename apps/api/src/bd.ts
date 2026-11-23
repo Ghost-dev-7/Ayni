@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS donaciones (
   comedor_id INTEGER REFERENCES comedores(id),
   creada_en TEXT NOT NULL,
   codigo_entrega TEXT,
+  token_entrega TEXT,
   reservada_por TEXT,
   reservada_en TEXT,
   recogida_por TEXT,
@@ -96,7 +97,7 @@ const TABLAS = ['inventario_movimientos', 'inventario_lotes', 'eventos', 'donaci
 const TABLAS_AL_RECREAR = [...TABLAS, 'inventario_minimos'];
 
 /** Versión del esquema. Si la base local es más antigua se recrea (solo contiene datos sintéticos). */
-const VERSION_ESQUEMA = 4;
+const VERSION_ESQUEMA = 5;
 
 /** Abre la base de datos SQLite (archivo, o ":memory:" para pruebas) y crea el esquema. */
 export function abrirBD(ruta: string = process.env.DB_PATH ?? resolve(import.meta.dirname, '../data/ayni.db')): BD {

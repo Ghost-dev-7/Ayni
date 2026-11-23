@@ -23,7 +23,6 @@ const donacion = (extra: Partial<Donacion> = {}): Donacion => ({
   estado: 'publicada',
   comedorId: null,
   creadaEn: enHoras(0),
-  codigoEntrega: null,
   reservadaPor: null,
   reservadaEn: null,
   recogidaPor: null,

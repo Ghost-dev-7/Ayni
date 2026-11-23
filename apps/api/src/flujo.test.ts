@@ -33,12 +33,17 @@ describe('flujo publicar → reservar → recoger', () => {
   };
   const reservar = (id: number, comedorId = 1) =>
     app.inject({ method: 'POST', url: `/api/donaciones/${id}/reservar`, payload: { comedorId, reservadoPor: 'Rosa M.' } });
-  const recoger = (id: number, extra: Record<string, unknown> = {}) =>
-    app.inject({
+  /** Lo que el comercio le muestra al comedor (QR y código). Solo existe mientras la entrega está reservada. */
+  const entrega = async (id: number) =>
+    (await app.inject({ url: `/api/donaciones/${id}/entrega?comercioId=1` })).json() as { token?: string; codigo?: string };
+  const recoger = async (id: number, extra: Record<string, unknown> = {}) => {
+    const { token } = await entrega(id);
+    return app.inject({
       method: 'POST',
       url: `/api/donaciones/${id}/recoger`,
-      payload: { comedorId: 1, recogidoPor: 'Rosa M.', cantidadRecibida: 20, estadoOk: true, ...extra },
+      payload: { comedorId: 1, recogidoPor: 'Rosa M.', cantidadRecibida: 20, estadoOk: true, token, ...extra },
     });
+  };
 
   beforeEach(() => {
     ahora = new Date(INICIO);
@@ -53,7 +58,9 @@ describe('flujo publicar → reservar → recoger', () => {
     assert.equal(r1.statusCode, 200);
     assert.equal(r1.json().estado, 'reservada');
     assert.equal(r1.json().comedorId, 1);
-    assert.match(r1.json().codigoEntrega, /^\d{2}-\d{2}$/);
+    // El código y el token de la entrega no salen en la respuesta del comedor: los muestra el comercio.
+    assert.equal(r1.json().codigoEntrega, undefined);
+    assert.equal(r1.json().tokenEntrega, undefined);
 
     const r2 = await recoger(id);
     assert.equal(r2.statusCode, 200);
@@ -73,7 +80,7 @@ describe('flujo publicar → reservar → recoger', () => {
 
   it('no deja recoger algo que no está reservado', async () => {
     const { id } = await publicar();
-    assert.equal((await recoger(id)).statusCode, 409);
+    assert.equal((await recoger(id, { token: 'a'.repeat(32) })).statusCode, 409);
   });
 
   it('solo el comedor que reservó puede confirmar la recogida', async () => {

@@ -7,6 +7,7 @@ import type {
   ComercioInput,
   Donacion,
   DonacionInput,
+  EntregaInfo,
   EstadoDonacion,
   EventoRegistro,
   RecogerInput,
@@ -14,8 +15,9 @@ import type {
   TipoComercio,
   Unidad,
 } from '@ayni/shared';
+import { PREFIJO_QR } from '@ayni/shared';
 import type { BD } from './bd.ts';
-import { ErrorDeNegocio, exigirTransicion, generarCodigoEntrega } from './estados.ts';
+import { ErrorDeNegocio, exigirTransicion, generarCodigoEntrega, generarTokenEntrega } from './estados.ts';
 import { registrarEvento } from './eventos.ts';
 import { registrarEntrada } from './inventario.ts';
 
@@ -67,7 +69,6 @@ function donacionDe(f: Fila): Donacion {
     estado: f.estado as EstadoDonacion,
     comedorId: f.comedor_id === null ? null : Number(f.comedor_id),
     creadaEn: String(f.creada_en),
-    codigoEntrega: f.codigo_entrega === null ? null : String(f.codigo_entrega),
     reservadaPor: f.reservada_por === null ? null : String(f.reservada_por),
     reservadaEn: f.reservada_en === null ? null : String(f.reservada_en),
     recogidaPor: f.recogida_por === null ? null : String(f.recogida_por),
@@ -219,10 +220,10 @@ export function reservarDonacion(db: BD, id: number, d: ReservarInput, ahora: Da
   if (donacion.requiereFrio && !comedor.refrigeracion) {
     throw new ErrorDeNegocio('Este producto requiere refrigeración y el comedor no la tiene.', 422);
   }
-  const codigoEntrega = generarCodigoEntrega();
+  // El token (QR) y el código de respaldo solo los ve el comercio: no salen en la donación pública.
   db.prepare(
-    "UPDATE donaciones SET estado = 'reservada', comedor_id = ?, codigo_entrega = ?, reservada_por = ?, reservada_en = ? WHERE id = ?",
-  ).run(comedor.id, codigoEntrega, d.reservadoPor, ahora.toISOString(), id);
+    "UPDATE donaciones SET estado = 'reservada', comedor_id = ?, codigo_entrega = ?, token_entrega = ?, reservada_por = ?, reservada_en = ? WHERE id = ?",
+  ).run(comedor.id, generarCodigoEntrega(), generarTokenEntrega(), d.reservadoPor, ahora.toISOString(), id);
   registrarEvento(db, {
     rol: 'comedor',
     actor: comedor.nombre,
@@ -234,8 +235,46 @@ export function reservarDonacion(db: BD, id: number, d: ReservarInput, ahora: Da
   return obtenerDonacion(db, id)!;
 }
 
-/** El comedor que reservó confirma la recogida. */
-export function recogerDonacion(db: BD, id: number, d: RecogerInput, ahora: Date = new Date()): Donacion {
+const soloDigitos = (s: string) => s.replace(/\D/g, '');
+
+/** Lo que el comercio muestra al comedor cuando este llega: el contenido del QR y el código de respaldo. */
+export function obtenerEntrega(db: BD, id: number, comercioId: number): EntregaInfo {
+  const f = db.prepare('SELECT comercio_id, estado, codigo_entrega, token_entrega FROM donaciones WHERE id = ?').get(id) as Fila | undefined;
+  if (!f) throw new ErrorDeNegocio('La donación no existe.', 404);
+  if (Number(f.comercio_id) !== comercioId) {
+    throw new ErrorDeNegocio('Solo el comercio que publicó la donación puede ver su código de entrega.', 403);
+  }
+  if (f.estado === 'recogida') throw new ErrorDeNegocio('Esta entrega ya fue recogida.', 409);
+  if (f.estado !== 'reservada' || f.token_entrega === null || f.codigo_entrega === null) {
+    throw new ErrorDeNegocio('La entrega aún no tiene un comedor asignado.', 409);
+  }
+  return { token: String(f.token_entrega), codigo: String(f.codigo_entrega) };
+}
+
+/**
+ * Confirma la entrega: comprueba que quien recoge muestra el token del QR (o el código de respaldo)
+ * de esta donación y recién entonces registra la recogida.
+ */
+export function confirmarEntrega(db: BD, id: number, d: RecogerInput, ahora: Date = new Date()): Donacion {
+  marcarVencidas(db, ahora);
+  const f = db.prepare('SELECT estado, comedor_id, codigo_entrega, token_entrega FROM donaciones WHERE id = ?').get(id) as Fila | undefined;
+  if (!f) throw new ErrorDeNegocio('La donación no existe.', 404);
+  exigirTransicion(f.estado as EstadoDonacion, 'recogida');
+  if (Number(f.comedor_id) !== d.comedorId) {
+    throw new ErrorDeNegocio('Solo el comedor que reservó puede confirmar la recogida.', 403);
+  }
+  const token = d.token?.replace(PREFIJO_QR, '');
+  const tokenOk = token !== undefined && f.token_entrega !== null && token === String(f.token_entrega);
+  const digitos = d.codigo === undefined ? '' : soloDigitos(d.codigo);
+  const codigoOk = digitos.length === 4 && f.codigo_entrega !== null && digitos === soloDigitos(String(f.codigo_entrega));
+  if (!tokenOk && !codigoOk) {
+    throw new ErrorDeNegocio('Ese código no corresponde a esta entrega. Revisa el QR o el código que muestra el comercio.', 403);
+  }
+  return recogerDonacion(db, id, d, ahora, tokenOk ? 'QR' : 'código');
+}
+
+/** El comedor que reservó confirma la recogida. `verificadaCon` deja en el registro cómo se comprobó la entrega. */
+export function recogerDonacion(db: BD, id: number, d: RecogerInput, ahora: Date = new Date(), verificadaCon?: 'QR' | 'código'): Donacion {
   marcarVencidas(db, ahora);
   const donacion = obtenerDonacion(db, id);
   if (!donacion) throw new ErrorDeNegocio('La donación no existe.', 404);
@@ -255,7 +294,7 @@ export function recogerDonacion(db: BD, id: number, d: RecogerInput, ahora: Date
     actor: comedor.nombre,
     accion: 'Recogida confirmada',
     entidad: donacion.codigo,
-    detalle: `${donacion.producto} · ${d.cantidadRecibida} ${donacion.unidad} recibidos · por ${d.recogidoPor}`,
+    detalle: `${donacion.producto} · ${d.cantidadRecibida} ${donacion.unidad} recibidos · por ${d.recogidoPor}${verificadaCon ? ` · entrega verificada con ${verificadaCon}` : ''}`,
     fecha: ahora.toISOString(),
   });
   // Lo recogido entra automáticamente al inventario del comedor.

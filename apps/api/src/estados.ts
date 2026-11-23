@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { EstadoDonacion } from '@ayni/shared';
 
 /**
@@ -30,6 +31,11 @@ export function exigirTransicion(desde: EstadoDonacion, hacia: EstadoDonacion): 
   if (!puedeTransicionar(desde, hacia)) {
     throw new ErrorDeNegocio(`No se puede pasar de "${desde}" a "${hacia}".`);
   }
+}
+
+/** Token secreto de la entrega: es lo que va dentro del QR y no se puede adivinar. */
+export function generarTokenEntrega(): string {
+  return randomBytes(16).toString('hex');
 }
 
 /** Código de entrega de 4 dígitos con formato "NN-NN". */

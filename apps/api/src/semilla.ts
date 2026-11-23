@@ -9,6 +9,7 @@ import { resolve } from 'node:path';
 import { CATALOGO, type Categoria, type Comedor, type Comercio, type EstadoDonacion, type TipoComercio, type Unidad } from '@ayni/shared';
 import { abrirBD, vaciarBD, type BD } from './bd.ts';
 import { registrarEntrada } from './inventario.ts';
+import { generarTokenEntrega } from './estados.ts';
 import { codigoDonacion, registrarEvento } from './repositorio.ts';
 
 const DIR_DATOS = resolve(import.meta.dirname, '../../../data/synthetic');
@@ -85,8 +86,8 @@ export function sembrar(db: BD, ahora: Date = new Date()): ResumenSemilla {
   const insDonacion = db.prepare(
     `INSERT INTO donaciones
       (id, codigo, comercio_id, producto, categoria, cantidad, unidad, caduca_en, ventana_desde, ventana_hasta, requiere_frio, estado, comedor_id, creada_en,
-       codigo_entrega, reservada_por, reservada_en, recogida_por, recogida_en, cantidad_recibida)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       codigo_entrega, token_entrega, reservada_por, reservada_en, recogida_por, recogida_en, cantidad_recibida)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
   let id = 0;
@@ -121,7 +122,7 @@ export function sembrar(db: BD, ahora: Date = new Date()): ResumenSemilla {
       id, codigo, comercio.id, producto.nombre, producto.categoria, cantidad, producto.unidad,
       iso(plan.caducaMs), iso(plan.creadaMs), iso(ventanaHasta), producto.frio ? 1 : 0,
       plan.estado, comedor?.id ?? null, iso(plan.creadaMs),
-      codigoEntrega, encargado, reservaMs === null ? null : iso(reservaMs),
+      codigoEntrega, comedor ? generarTokenEntrega() : null, encargado, reservaMs === null ? null : iso(reservaMs),
       recogidaMs === null ? null : encargado, recogidaMs === null ? null : iso(recogidaMs), recogidaMs === null ? null : cantidad,
     );
     const det = `${producto.nombre} · ${cantidad} ${producto.unidad}`;

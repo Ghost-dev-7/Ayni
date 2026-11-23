@@ -107,14 +107,36 @@ export const reservarInputSchema = z.object({
 });
 export type ReservarInput = z.infer<typeof reservarInputSchema>;
 
-/** El comedor confirma que recogió la donación y declara la cantidad recibida. */
-export const recogerInputSchema = z.object({
-  comedorId: z.number().int().positive(),
-  recogidoPor: z.string().trim().min(2).max(80),
-  cantidadRecibida: entero,
-  estadoOk: z.literal(true, { errorMap: () => ({ message: 'Debes confirmar que el producto está en buen estado.' }) }),
-});
+/**
+ * El comedor confirma que recogió la donación y declara la cantidad recibida.
+ * La entrega se verifica con el QR que muestra el comercio (`token`) o, si no se puede escanear,
+ * con el código de 4 dígitos que aparece debajo del QR (`codigo`).
+ */
+export const recogerInputSchema = z
+  .object({
+    comedorId: z.number().int().positive(),
+    recogidoPor: z.string().trim().min(2).max(80),
+    cantidadRecibida: entero,
+    estadoOk: z.literal(true, { errorMap: () => ({ message: 'Debes confirmar que el producto está en buen estado.' }) }),
+    token: z.string().trim().min(8).max(100).optional(),
+    codigo: z.string().trim().min(4).max(10).optional(),
+  })
+  .refine((d) => d.token !== undefined || d.codigo !== undefined, {
+    message: 'Escanea el QR del comercio o escribe su código de entrega.',
+    path: ['token'],
+  });
 export type RecogerInput = z.infer<typeof recogerInputSchema>;
+
+/** Lo que el comercio muestra al comedor al entregar: el contenido del QR y su código de respaldo. */
+export interface EntregaInfo {
+  /** Va dentro del QR, con el prefijo "ayni:". */
+  token: string;
+  /** Código de 4 dígitos ("48-27") para escribirlo si la cámara no funciona. */
+  codigo: string;
+}
+
+/** Prefijo del contenido del QR, para distinguir un QR de Ayni de cualquier otro. */
+export const PREFIJO_QR = 'ayni:';
 
 export interface Comercio {
   id: number;
@@ -155,8 +177,6 @@ export interface Donacion {
   estado: EstadoDonacion;
   comedorId: number | null;
   creadaEn: string;
-  /** Código corto que identifica la entrega en el mostrador (se genera al reservar). */
-  codigoEntrega: string | null;
   reservadaPor: string | null;
   reservadaEn: string | null;
   recogidaPor: string | null;

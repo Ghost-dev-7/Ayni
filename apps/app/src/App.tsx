@@ -25,7 +25,7 @@ export function App() {
 
   if (zona === 'comercio') {
     if (seccion === 'publicar') return <ComercioPublicar sesion={sesion} />;
-    if (seccion === 'donacion' && param) return <ComercioDonacion id={Number(param)} />;
+    if (seccion === 'donacion' && param) return <ComercioDonacion sesion={sesion} id={Number(param)} />;
     return <ComercioInicio sesion={sesion} />;
   }
 

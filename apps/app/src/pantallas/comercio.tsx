@@ -1,6 +1,7 @@
-import { CATALOGO, CATEGORIAS, DIAS_MINIMOS_PARA_PUBLICAR, UNIDADES, aKgProducto, buscarEnCatalogo, etiquetaUnidad, type Categoria, type Unidad } from '@ayni/shared';
+import { CATALOGO, CATEGORIAS, DIAS_MINIMOS_PARA_PUBLICAR, PREFIJO_QR, UNIDADES, aKgProducto, buscarEnCatalogo, etiquetaUnidad, type Categoria, type Unidad } from '@ayni/shared';
 import { useState, type FormEvent } from 'react';
 import { api, type DonacionN } from '../api.ts';
+import { CodigoQR } from '../CodigoQR.tsx';
 import { Cabecera, Chip, Estado, Marco, nombreEstado, tonoEstado, type Pestana } from '../componentes.tsx';
 import { ICONO, NOMBRE_CATEGORIA, aInputLocal, cantidadTexto, claseSemaforo, fechaHora, hora, textoVence } from '../formato.ts';
 import { ir, useCarga, type Sesion } from '../sesion.ts';
@@ -256,9 +257,12 @@ export function ComercioPublicar({ sesion }: { sesion: Sesion }) {
   );
 }
 
-export function ComercioDonacion({ id }: { id: number }) {
-  const donacion = useCarga(() => api.donacion(id), [id]);
+export function ComercioDonacion({ id, sesion }: { id: number; sesion: Sesion }) {
+  // Se actualiza sola: cuando el comedor escanea el QR, aquí pasa a "Recogida" sin tocar nada.
+  const donacion = useCarga(() => api.donacion(id), [id], 4_000);
   const comedores = useCarga(api.comedores);
+  const estadoActual = donacion.datos?.estado;
+  const entrega = useCarga(() => (estadoActual === 'reservada' ? api.entrega(id, sesion.id) : Promise.resolve(null)), [id, estadoActual, sesion.id]);
   const ahora = new Date();
 
   return (
@@ -278,6 +282,30 @@ export function ComercioDonacion({ id }: { id: number }) {
                   {abierta && <span className={`sem ${claseSemaforo(d.nivelCaducidad)}`}>{textoVence(d.caducaEn, ahora)} · {hora(d.caducaEn)}</span>}
                 </div>
               </div>
+
+              {d.estado === 'reservada' && (
+                <section className="card qr-card" style={{ marginTop: 12 }} aria-label="Entrega con QR">
+                  <b>Entrega con QR</b>
+                  {entrega.datos ? (
+                    <>
+                      <CodigoQR texto={`${PREFIJO_QR}${entrega.datos.token}`} descripcion={`QR de la entrega de ${d.producto}`} />
+                      <p className="small">Muéstralo a quien venga por el producto. Al escanearlo, la entrega queda <b>aprobada</b> y registrada.</p>
+                      <div className="small muted" style={{ marginTop: 8 }}>¿No puede escanear? Dile este código:</div>
+                      <div className="codigo-mini">{entrega.datos.codigo}</div>
+                    </>
+                  ) : entrega.error ? (
+                    <div className="aviso error" role="alert" style={{ marginTop: 8 }}>{entrega.error}</div>
+                  ) : (
+                    <p className="small muted">Preparando el QR…</p>
+                  )}
+                </section>
+              )}
+              {d.estado === 'recogida' && (
+                <div className="aviso ok" role="status" style={{ marginTop: 12 }}>
+                  <b>✅ Entrega aprobada</b>
+                  <div className="small">El comedor verificó la entrega con tu QR y recibió {d.cantidadRecibida !== null ? cantidadTexto(d.cantidadRecibida, d.unidad, d.producto) : 'el producto'}. Quedó registrado en la trazabilidad.</div>
+                </div>
+              )}
 
               <div className="section-title"><h2>Estado</h2><Chip tono={tonoEstado(d.estado)}>{nombreEstado(d.estado)}</Chip></div>
               <ul className="timeline">
@@ -302,13 +330,6 @@ export function ComercioDonacion({ id }: { id: number }) {
                 ) : null}
               </ul>
 
-              {d.codigoEntrega && d.estado === 'reservada' && (
-                <div className="card" style={{ marginTop: 6 }}>
-                  <div className="small muted">Código de entrega</div>
-                  <div className="codigo">{d.codigoEntrega}</div>
-                  <p className="hint">El comedor te lo mostrará al recoger. Queda registrado en la trazabilidad.</p>
-                </div>
-              )}
             </>
           );
         }}

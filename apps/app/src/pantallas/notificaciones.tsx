@@ -1,10 +1,11 @@
-import { STOCK_MINIMO, type EventoRegistro } from '@ayni/shared';
+import { STOCK_MINIMO, type Donacion, type EventoRegistro } from '@ayni/shared';
+import { useState } from 'react';
 import { api } from '../api.ts';
 import { Estado, Marco } from '../componentes.tsx';
 import { cantidadTexto, haceTiempo, textoVence } from '../formato.ts';
-import { useCarga, type Sesion } from '../sesion.ts';
-import { TarjetaReserva } from './comedor.tsx';
+import { ir, useCarga, type Sesion } from '../sesion.ts';
 import { PESTANAS_COMEDOR as PESTANAS } from './pestanas.ts';
+import { TarjetaReserva } from './recogida.tsx';
 
 interface Aspecto {
   icono: string;
@@ -38,10 +39,17 @@ export function ComedorNotificaciones({ sesion }: { sesion: Sesion }) {
   const comedor = comedores.datos?.find((c) => c.id === sesion.id);
   const ahora = new Date();
 
+  // La última entrega aprobada se queda a la vista hasta que el comedor la cierre.
+  const [aprobada, setAprobada] = useState<Donacion | null>(null);
+
   const alCambiar = () => {
     donaciones.recargar();
     eventos.recargar();
     inventario.recargar();
+  };
+  const alAprobar = (recogida: Donacion) => {
+    setAprobada(recogida);
+    alCambiar();
   };
 
   const pendientes = (donaciones.datos ?? [])
@@ -56,12 +64,25 @@ export function ComedorNotificaciones({ sesion }: { sesion: Sesion }) {
       <div className="top"><b style={{ fontSize: 20, fontFamily: 'var(--serif)' }}>Notificaciones</b></div>
       <p className="small muted" style={{ marginTop: -6 }}>Se actualizan solas. Aquí ves lo que debes recoger, las alertas del inventario y todo lo que va pasando.</p>
 
+      {aprobada && (
+        <section className="aprobado" role="status" aria-live="polite" style={{ marginTop: 12 }}>
+          <div className="aprobado-icono" aria-hidden="true">✓</div>
+          <h2>Aprobado</h2>
+          <b>{aprobada.producto} · {cantidadTexto(aprobada.cantidadRecibida ?? aprobada.cantidad, aprobada.unidad, aprobada.producto)}</b>
+          <p className="small" style={{ margin: '6px 0 12px' }}>Entrega verificada con el comercio. Quedó registrada y ya está en tu inventario.</p>
+          <div className="row" style={{ justifyContent: 'center', gap: 8 }}>
+            <button className="btn" type="button" onClick={() => ir('/comedor/inventario')}>Ver inventario</button>
+            <button className="btn ghost" type="button" onClick={() => setAprobada(null)}>Cerrar</button>
+          </div>
+        </section>
+      )}
+
       {pendientes.length > 0 && (
         <>
           <div className="section-title"><h2>Por recoger ({pendientes.length})</h2></div>
           <div className="stack">
             {pendientes.map((d) => (
-              <TarjetaReserva key={d.id} d={d} comedor={comedor} comercio={comercios.datos?.find((c) => c.id === d.comercioId)} ahora={ahora} alCambiar={alCambiar} />
+              <TarjetaReserva key={d.id} d={d} comedor={comedor} comercio={comercios.datos?.find((c) => c.id === d.comercioId)} ahora={ahora} alCambiar={alCambiar} alAprobar={alAprobar} />
             ))}
           </div>
         </>

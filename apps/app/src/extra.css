@@ -26,4 +26,17 @@ select.input { appearance: auto; }
 .seg button { flex: 1; text-align: center; padding: 10px 6px; border: 0; border-radius: 999px; background: transparent; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; }
 .seg button.on { background: var(--paper); color: var(--g900); box-shadow: var(--shadow); }
 .logo-rol { width: 190px; max-width: 70%; height: auto; }
+/* QR de la entrega y escáner de cámara. */
+.qr { display: block; margin: 8px auto; border-radius: 14px; border: 1px solid var(--line); background: #fff; padding: 4px; max-width: 100%; height: auto; }
+.qr-cargando { background: var(--sand); }
+.qr-card { text-align: center; }
+.codigo-mini { font-family: var(--serif); font-size: 22px; letter-spacing: .16em; color: var(--g900); }
+.escaner { position: relative; aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: #0d1a13; }
+.escaner video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.escaner-marco { position: absolute; inset: 16%; border: 3px solid #fff; border-radius: 18px; box-shadow: 0 0 0 999px rgba(0, 0, 0, .38); }
+.escaner-espera { position: absolute; inset: 0; display: grid; place-items: center; color: #fff; font-size: 14px; }
+/* Confirmación de una entrega aprobada. */
+.aprobado { background: var(--g100); border: 2px solid var(--g500); border-radius: 18px; padding: 18px 16px; text-align: center; }
+.aprobado h2 { font-family: var(--serif); font-size: 30px; color: var(--g900); margin: 4px 0; }
+.aprobado-icono { width: 56px; height: 56px; border-radius: 50%; background: var(--g700); color: #fff; font-size: 32px; font-weight: 700; display: grid; place-items: center; margin: 0 auto; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
