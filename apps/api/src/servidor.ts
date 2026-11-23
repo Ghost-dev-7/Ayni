@@ -1,6 +1,7 @@
 import cors from '@fastify/cors';
 import {
   activoInputSchema,
+  borradorInputSchema,
   comedorInputSchema,
   comedorPerfilSchema,
   entradaInventarioSchema,
@@ -17,6 +18,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { abrirBD, type BD } from './bd.ts';
 import { nivelCaducidad, puedePublicar } from './caducidad.ts';
+import { interpretarTexto } from './texto.ts';
 import { ofertasParaComedor, sugerirComedores } from './emparejamiento.ts';
 import { registrarEvento } from './eventos.ts';
 import { calcularImpacto } from './impacto.ts';
@@ -122,6 +124,9 @@ export function construirApi(db: BD, reloj: () => Date = () => new Date()): Fast
     });
     return reply.status(201).send(creada);
   });
+
+  // Texto libre → borrador de donación (analizador por reglas; el comercio lo confirma antes de publicar).
+  app.post('/api/donaciones/borrador', async (req) => interpretarTexto(borradorInputSchema.parse(req.body).texto, reloj()));
 
   app.get('/api/donaciones/:id/sugerencias', async (req, reply) => {
     const id = Number((req.params as { id: string }).id);

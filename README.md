@@ -16,6 +16,7 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
 
 - **App web (móvil primero, instalable como PWA)** para comercios y comedores:
   - El **comercio** publica un producto por vencer (producto, cantidad, caducidad, ventana de recojo) y sigue su estado.
+  - El comercio también puede **escribirlo con sus palabras** ("20 kg de pan de ayer, recojo hasta las 6pm"): un analizador por reglas, sin IA externa, rellena el formulario y avisa de lo que no entendió. Siempre se revisa antes de publicar.
   - El **comedor** ve las donaciones disponibles ordenadas por un **puntaje de 0 a 100** y puede ver **por qué** se le sugiere cada una. Las **reserva**.
   - El comedor **confirma la recogida** (estado del producto y cantidad recibida) y lo recogido **entra solo a su inventario**.
   - El comedor gestiona su **inventario**: lotes con caducidad, entradas, consumo, mermas y stock mínimo con alertas. Al consumir se descuenta primero lo que vence antes (PEPS).
@@ -25,6 +26,7 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
   - **Registro de eventos** con filtros y el recorrido completo (trazabilidad) de cada donación.
   - **Donaciones** por estado. Para las que nadie reservó, el ranking de comedores con el puntaje explicado y la opción de **asignarla a mano**.
   - **Inventario central** de toda la red: stock, lotes que vencen pronto y productos que faltan en cada comedor.
+  - **Mapa de la red** (Leaflet y OpenStreetMap, requiere internet) con comercios y comedores, distancia media de cobertura y las zonas que aún no tienen un comedor cerca. Hay una lista de respaldo si no carga el plano.
   - Alta, activación y desactivación de **comedores** y **comercios**, de modo que la red crece sin tocar código.
 - **Emparejamiento explicable:** `puntaje = 0,35·urgencia + 0,25·cercanía + 0,25·necesidad + 0,15·capacidad`.
   - *Urgencia:* crece cuanto menos tiempo queda para vencer.
@@ -35,6 +37,7 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
 - **Estados** de una donación: `publicada → reservada → recogida` (o `vencida` si pasa la fecha).
 - **Reglas de seguridad alimentaria:** no se publica un producto vencido, no se reserva uno vencido y los productos que requieren frío solo se reservan en comedores con refrigeración.
 - **Trazabilidad:** cada paso queda en un registro de eventos.
+- **Instalable y con modo sin conexión:** la app se puede instalar en el teléfono y, sin internet, abre y muestra lo último que vio. Publicar, reservar y recoger sí necesitan conexión.
 - Todos los datos de la demostración son **sintéticos** (ficticios).
 
 ## Tecnologías
@@ -42,7 +45,8 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
 - **API:** Node.js, TypeScript y Fastify, con validación Zod.
 - **Base de datos:** SQLite (`node:sqlite`, incluido en Node).
 - **App y web de administración:** React, Vite y TypeScript.
-- **Pruebas:** `node:test` (más de 70 pruebas de la API y las reglas del negocio).
+- **Mapa:** Leaflet con teselas de OpenStreetMap (gratuito, sin clave).
+- **Pruebas:** `node:test` (más de 80 pruebas de la API y las reglas del negocio).
 - **Monorepo** con npm workspaces: `apps/api`, `apps/app`, `apps/admin` y `packages/shared` (tipos y esquemas compartidos).
 
 ## Instalación y uso
@@ -80,6 +84,6 @@ data/synthetic  Datos ficticios de demostración
 
 ## Estado
 
-En desarrollo durante el evento. Próximamente: mapa de la red, creación de donaciones a partir de texto libre y pulido final de la app instalable.
+En desarrollo durante el evento. Las funciones principales están completas; lo que queda es pulido y verificación final.
 
 Los supuestos de la demostración (1 ración ≈ 0,5 kg, 1 unidad suelta ≈ 0,25 kg, capacidad de almacenar 7 días de consumo) son ajustables y están definidos en un solo lugar del código.

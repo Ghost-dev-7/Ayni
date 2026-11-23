@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useSyncExternalStore, type ReactNode } from 'react';
 import type { Carga } from './sesion.ts';
 
 export interface Pestana {
@@ -7,11 +7,26 @@ export interface Pestana {
   ruta: string;
 }
 
+const suscribirConexion = (cb: () => void) => {
+  window.addEventListener('online', cb);
+  window.addEventListener('offline', cb);
+  return () => {
+    window.removeEventListener('online', cb);
+    window.removeEventListener('offline', cb);
+  };
+};
+
 /** Marco de la app: aviso de datos de demostración, contenido y barra de pestañas inferior. */
 export function Marco({ children, pestanas, activa }: { children: ReactNode; pestanas?: Pestana[]; activa?: string }) {
+  const enLinea = useSyncExternalStore(suscribirConexion, () => navigator.onLine);
   return (
     <div className="device">
       <div className="demo-banner">Datos de demostración (sintéticos)</div>
+      {!enLinea && (
+        <div className="sin-conexion" role="status">
+          Sin conexión: se muestra lo último guardado. Publicar y reservar necesitan internet.
+        </div>
+      )}
       <main className="screen">{children}</main>
       {pestanas && (
         <nav className="tabbar" aria-label="Principal">

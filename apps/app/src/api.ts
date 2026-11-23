@@ -1,4 +1,5 @@
 import type {
+  BorradorDonacion,
   Comedor,
   ComedorPerfil,
   Comercio,
@@ -47,6 +48,7 @@ export const api = {
   comedores: () => pedir<Comedor[]>('/comedores'),
   donaciones: (estado?: string) => pedir<DonacionN[]>(`/donaciones${estado ? `?estado=${estado}` : ''}`),
   donacion: (id: number) => pedir<DonacionN>(`/donaciones/${id}`),
+  borrador: (texto: string) => pedir<BorradorDonacion>('/donaciones/borrador', { metodo: 'POST', cuerpo: { texto } }),
   publicar: (d: DonacionInput) => pedir<Donacion>('/donaciones', { metodo: 'POST', cuerpo: d }),
   reservar: (id: number, d: ReservarInput) => pedir<Donacion>(`/donaciones/${id}/reservar`, { metodo: 'POST', cuerpo: d }),
   recoger: (id: number, d: RecogerInput) => pedir<Donacion>(`/donaciones/${id}/recoger`, { metodo: 'POST', cuerpo: d }),

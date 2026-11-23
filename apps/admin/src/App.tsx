@@ -5,6 +5,7 @@ import { ComercioNuevo, Comercios } from './paginas/Comercios.tsx';
 import { Donaciones } from './paginas/Donaciones.tsx';
 import { Eventos } from './paginas/Eventos.tsx';
 import { Inventario } from './paginas/Inventario.tsx';
+import { Mapa } from './paginas/Mapa.tsx';
 import { Panel } from './paginas/Panel.tsx';
 
 export function App() {
@@ -19,6 +20,7 @@ export function App() {
       case '/comercios': return { activa: '/comercios', vista: <Comercios /> };
       case '/comercios/nuevo': return { activa: '/comercios', vista: <ComercioNuevo /> };
       case '/inventario': return { activa: '/inventario', vista: <Inventario /> };
+      case '/mapa': return { activa: '/mapa', vista: <Mapa /> };
       default: return { activa: '/', vista: <Panel /> };
     }
   })();

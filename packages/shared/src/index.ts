@@ -78,6 +78,23 @@ export const donacionInputSchema = z
   });
 export type DonacionInput = z.infer<typeof donacionInputSchema>;
 
+/** Texto libre del comercio ("20 kg de pan de ayer, recojo hasta las 6pm"). */
+export const borradorInputSchema = z.object({ texto: z.string().trim().min(3).max(400) });
+
+/** Borrador de donación creado a partir de una frase. El comercio lo revisa antes de publicar. */
+export interface BorradorDonacion {
+  producto: string;
+  categoria: Categoria;
+  cantidad: number | null;
+  unidad: Unidad;
+  caducaEn: string;
+  ventanaHasta: string;
+  requiereFrio: boolean;
+  /** Cosas que el analizador no entendió o tuvo que suponer. */
+  advertencias: string[];
+  entendido: { producto: boolean; cantidad: boolean; caducidad: boolean; ventana: boolean };
+}
+
 /** Un comedor reserva una donación publicada. */
 export const reservarInputSchema = z.object({
   comedorId: z.number().int().positive(),

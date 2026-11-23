@@ -107,6 +107,30 @@ export function ComercioPublicar({ sesion }: { sesion: Sesion }) {
   const [frio, setFrio] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [frase, setFrase] = useState('');
+  const [creando, setCreando] = useState(false);
+  const [avisos, setAvisos] = useState<string[] | null>(null);
+
+  /** Convierte la frase en un borrador que rellena el formulario; el comercio lo revisa antes de publicar. */
+  const crearBorrador = async () => {
+    setError(null);
+    setCreando(true);
+    try {
+      const b = await api.borrador(frase);
+      setProducto(b.producto);
+      setCategoria(b.categoria);
+      setCantidad(b.cantidad === null ? '' : String(b.cantidad));
+      setUnidad(b.unidad);
+      setCaduca(aInputLocal(new Date(b.caducaEn)));
+      setHasta(aInputLocal(new Date(b.ventanaHasta)));
+      setFrio(b.requiereFrio);
+      setAvisos(b.advertencias);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo crear el borrador.');
+    } finally {
+      setCreando(false);
+    }
+  };
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault();
@@ -135,6 +159,33 @@ export function ComercioPublicar({ sesion }: { sesion: Sesion }) {
   return (
     <Marco pestanas={PESTANAS} activa="/comercio/publicar">
       <Cabecera titulo="Nueva donación" atras="/comercio" />
+
+      <section className="card" style={{ background: 'var(--amber-100)', borderColor: '#f0cfa3' }}>
+        <div className="row">
+          <span style={{ fontSize: 22 }} aria-hidden="true">✨</span>
+          <b>Cuéntalo con tus palabras</b>
+        </div>
+        <label className="field" style={{ marginTop: 8 }}>
+          <span className="sr-only">Describe la donación</span>
+          <textarea className="input" value={frase} onChange={(e) => setFrase(e.target.value)} placeholder="Ej.: 20 kg de pan de ayer, recojo hasta las 6pm" />
+        </label>
+        <button type="button" className="btn amber block" style={{ marginTop: 10 }} disabled={creando || frase.trim().length < 3} onClick={crearBorrador}>
+          {creando ? 'Leyendo…' : 'Crear borrador'}
+        </button>
+        <p className="hint">Rellena el formulario por ti. Siempre lo revisas antes de publicar.</p>
+        {avisos && (
+          <div className="aviso ok" role="status" style={{ marginTop: 10 }}>
+            <b>Borrador creado: revísalo abajo.</b>
+            {avisos.length > 0 && (
+              <ul className="small" style={{ paddingLeft: 18, marginTop: 4 }}>
+                {avisos.map((a) => <li key={a}>{a}</li>)}
+              </ul>
+            )}
+          </div>
+        )}
+      </section>
+
+      <p className="small muted" style={{ textAlign: 'center', margin: '14px 0 4px' }}>— o llena el formulario —</p>
       <form className="stack" onSubmit={enviar}>
         <label className="field">
           <span>Producto</span>

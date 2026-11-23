@@ -12,6 +12,7 @@ button.btn:disabled { opacity: .55; cursor: not-allowed; }
 .checks input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--g700); }
 .codigo { font-family: var(--serif); font-size: 40px; letter-spacing: .2em; font-weight: 700; color: var(--g900); }
 select.input { appearance: auto; }
+.sin-conexion { background: var(--yellow-100); color: #5c4500; font-size: 12px; font-weight: 600; text-align: center; padding: 6px 12px; }
 .seg button { flex: 1; text-align: center; padding: 10px 6px; border: 0; border-radius: 999px; background: transparent; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; }
 .seg button.on { background: var(--paper); color: var(--g900); box-shadow: var(--shadow); }
 .logo-rol { width: 190px; max-width: 70%; height: auto; }

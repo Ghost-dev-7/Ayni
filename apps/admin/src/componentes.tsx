@@ -8,6 +8,7 @@ const MENU = [
   { grupo: 'Red' },
   { ruta: '/comedores', etiqueta: 'Comedores', icono: '🍽️' },
   { ruta: '/comercios', etiqueta: 'Comercios', icono: '🏪' },
+  { ruta: '/mapa', etiqueta: 'Mapa de la red', icono: '◎' },
   { grupo: 'Operación' },
   { ruta: '/inventario', etiqueta: 'Inventario central', icono: '▦' },
 ] as const;

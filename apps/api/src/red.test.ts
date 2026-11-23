@@ -111,6 +111,18 @@ describe('API de emparejamiento e inventario', () => {
     assert.equal(malo.statusCode, 400);
   });
 
+  it('crea un borrador desde texto libre sin publicar nada', async () => {
+    const antes = ((await app.inject({ url: '/api/donaciones' })).json() as unknown[]).length;
+    const r = await app.inject({ method: 'POST', url: '/api/donaciones/borrador', payload: { texto: '20 kg de pan de ayer, recojo hasta las 6pm' } });
+    assert.equal(r.statusCode, 200);
+    const b = r.json();
+    assert.equal(b.producto, 'Pan francés');
+    assert.equal(b.cantidad, 20);
+    assert.equal(b.unidad, 'kg');
+    assert.equal(((await app.inject({ url: '/api/donaciones' })).json() as unknown[]).length, antes);
+    assert.equal((await app.inject({ method: 'POST', url: '/api/donaciones/borrador', payload: { texto: ' ' } })).statusCode, 400);
+  });
+
   it('el inventario central responde con totales, vencimientos y faltantes', async () => {
     const r = await app.inject({ url: '/api/inventario' });
     assert.equal(r.statusCode, 200);
