@@ -10,7 +10,13 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
 
 ## Equipo
 
-- Abel Fernandez
+**Nombre del equipo:** Ayni
+
+**Integrantes:**
+
+- Fernandez Chuse, Abel
+- Guevara Cardenas, Jarol
+- Chavez Huashua, Nicolas
 
 ## Qué hace hoy
 
@@ -46,12 +52,12 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
 - **Base de datos:** SQLite (`node:sqlite`, incluido en Node).
 - **App y web de administración:** React, Vite y TypeScript.
 - **Mapa:** Leaflet con teselas de OpenStreetMap (gratuito, sin clave).
-- **Pruebas:** `node:test` (más de 80 pruebas de la API y las reglas del negocio).
+- **Pruebas:** `node:test` (87 pruebas de la API y las reglas del negocio).
 - **Monorepo** con npm workspaces: `apps/api`, `apps/app`, `apps/admin` y `packages/shared` (tipos y esquemas compartidos).
 
 ## Instalación y uso
 
-Requisitos: **Node.js 24 o superior**.
+Requisitos: **Node.js 24 o superior** (probado con Node 26) y conexión a internet solo para `npm install` y para el plano del mapa.
 
 ```bash
 npm install
@@ -63,11 +69,20 @@ npm run admin    # web de administración en http://localhost:5174 (en otra term
 
 Abre `http://localhost:5173`, elige si entras como comercio o como comedor y prueba el flujo: publicar, reservar y recoger. Abre `http://localhost:5174` para ver el panel, el registro de eventos y gestionar comedores y comercios.
 
+Para volver a los datos de demostración originales, ejecuta `npm run seed` de nuevo. La API acepta las variables `PORT` (por defecto 3001) y `DB_PATH` (archivo de la base de datos).
+
 Pruebas y verificación de tipos:
 
 ```bash
 npm test
 npm run typecheck
+```
+
+Versión compilada de la app (es la que registra el modo sin conexión; con la API encendida):
+
+```bash
+npm run build:app
+npm run preview -w @ayni/app    # http://localhost:4173
 ```
 
 > En Windows PowerShell, si los scripts están bloqueados, usa `npm.cmd` en lugar de `npm`.
@@ -84,6 +99,12 @@ data/synthetic  Datos ficticios de demostración
 
 ## Estado
 
-En desarrollo durante el evento. Las funciones principales están completas; lo que queda es pulido y verificación final.
+Prototipo funcional de extremo a extremo, desarrollado durante el evento y verificado instalándolo desde cero en una carpeta limpia (instalación, 87 pruebas, comprobación de tipos y compilación).
 
-Los supuestos de la demostración (1 ración ≈ 0,5 kg, 1 unidad suelta ≈ 0,25 kg, capacidad de almacenar 7 días de consumo) son ajustables y están definidos en un solo lugar del código.
+Alcance del prototipo: no hay autenticación real (se elige un rol y una cuenta), no hay pagos ni logística de transporte, y todos los datos son ficticios.
+
+Los supuestos de la demostración son constantes del código y se pueden ajustar:
+
+- 1 ración ≈ 0,5 kg: `KG_POR_RACION`, en `packages/shared/src/index.ts`.
+- 1 unidad suelta ≈ 0,25 kg: `KG_POR_UNIDAD`, en `apps/api/src/medidas.ts`.
+- Capacidad de almacenar 7 días de consumo: `DIAS_DE_CAPACIDAD`, en `apps/api/src/emparejamiento.ts`.
