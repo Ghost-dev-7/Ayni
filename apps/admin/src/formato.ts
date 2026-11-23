@@ -53,7 +53,8 @@ export function distanciaKm(a: { lat: number; lng: number }, b: { lat: number; l
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-export const km = (n: number) => `${n.toFixed(1).replace('.', ',')} km`;
+/** Distancia sin decimales: "700 m" por debajo de 1 km y "2 km" desde ahí. */
+export const km = (n: number) => (n < 1 ? `${Math.max(10, Math.round(n * 100) * 10)} m` : `${Math.round(n)} km`);
 
 /** Fecha local en el formato que espera <input type="datetime-local">. */
 export function aInputLocal(d: Date): string {
@@ -62,4 +63,4 @@ export function aInputLocal(d: Date): string {
 }
 
 export const cantidadTexto = (n: number, unidad: Unidad, producto?: string) =>
-  `${Number.isInteger(n) ? n : n.toFixed(1)} ${producto ? etiquetaUnidad(producto, unidad) : unidad}`;
+  `${Math.round(n)} ${producto ? etiquetaUnidad(producto, unidad) : unidad}`;

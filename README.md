@@ -27,7 +27,7 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
   - El **comedor** elige en **Ofertas** lo que busca (categorías), indica si tiene refrigeración y ve las donaciones ordenadas por un **puntaje de 0 a 100**, con el **porqué** de cada una. Las **reserva**.
   - El comedor **confirma la recogida** desde **Notificaciones** (estado del producto y cantidad recibida) y lo recogido **entra solo a su inventario**.
   - **Notificaciones** reúne, y se actualiza sola: lo que hay por recoger, las alertas del inventario (stock bajo, productos por vencer) y el historial de lo reservado, recogido, ingresado y consumido.
-  - **Inventario** del comedor: el stock no se escribe a mano. Sube solo al recoger una donación y baja solo al registrar lo **consumido**, descontando primero lo que vence antes (PEPS). El **mínimo es 10** de la unidad de cada producto y, por debajo, se marca en rojo y avisa. Dos botones muestran la lista de **productos bajo 10** y la de **productos en stock**, y cada producto despliega sus lotes.
+  - **Inventario** del comedor: el stock no se escribe a mano. Sube solo al recoger una donación y baja solo al registrar lo **consumido**, descontando primero lo que vence antes (PEPS). El **mínimo es 10** de la unidad de cada producto y, por debajo, se marca en rojo y avisa. Dos botones muestran la lista de **productos bajo 10** y la de **productos en stock**. Un producto con más de un lote (tandas con distinta fecha de vencimiento) lo indica y permite desplegarlos; con un solo lote no se muestra nada de lotes.
 - **Web de administración** (escritorio) para el equipo que opera la plataforma:
   - **Panel de monitoreo e impacto** en vivo: kg rescatados, raciones equivalentes, comedores atendidos, % recogido antes de vencer, tiempo medio y alertas.
   - **Registro de eventos** con filtros y el recorrido completo (trazabilidad) de cada donación.
@@ -41,6 +41,7 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
   - *Necesidad:* categoría prioritaria del comedor, o producto que le falta en su inventario.
   - *Capacidad:* espacio que le queda según sus raciones diarias y lo que ya tiene almacenado.
   - Un comedor desactivado o sin refrigeración (si el producto la requiere) no es elegible.
+- **Solo números enteros:** todas las cantidades (donar, recoger, consumir) son enteros y la API rechaza los decimales; si el texto libre trae uno, lo redondea y avisa. Las distancias se muestran en metros o kilómetros enteros. (Solo las coordenadas del mapa, en el alta de comedores y comercios, llevan decimales.)
 - **Semáforo de caducidad:** rojo si quedan 3 días o menos, amarillo hasta 5 días, verde si queda más.
 - **Estados** de una donación: `publicada → reservada → recogida` (o `vencida` si pasa la fecha).
 - **Reglas de seguridad alimentaria:** solo se publican productos que **vencen en 3 días o más** (los que duran más están bien), no se reserva uno vencido y los productos que requieren frío solo se reservan en comedores con refrigeración.
@@ -54,7 +55,7 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
 - **Base de datos:** SQLite (`node:sqlite`, incluido en Node).
 - **App y web de administración:** React, Vite y TypeScript.
 - **Mapa:** Leaflet con teselas de OpenStreetMap (gratuito, sin clave).
-- **Pruebas:** `node:test` (107 pruebas de la API y las reglas del negocio).
+- **Pruebas:** `node:test` (110 pruebas de la API y las reglas del negocio).
 - **Monorepo** con npm workspaces: `apps/api`, `apps/app`, `apps/admin` y `packages/shared` (tipos y esquemas compartidos).
 
 ## Instalación y uso
@@ -107,7 +108,7 @@ Alcance del prototipo: no hay autenticación real (se elige un rol y una cuenta)
 
 Los supuestos de la demostración son constantes del código y se pueden ajustar:
 
-- 1 ración ≈ 0,5 kg: `KG_POR_RACION`, en `packages/shared/src/index.ts`.
+- 1 kg ≈ 2 raciones (`KG_POR_RACION`, en `packages/shared/src/index.ts`).
 - Peso aproximado de una unidad de cada producto (un pan ≈ 0,1 kg, una lata de atún ≈ 0,17 kg…), solo para convertir a kilos las cifras del panel de impacto: `pesoKgPorUnidad`, en `packages/shared/src/catalogo.ts`. Un producto sin peso definido cuenta 0,25 kg por unidad.
 - Stock mínimo de 10 por producto: `STOCK_MINIMO`, en `packages/shared/src/catalogo.ts`.
 - Capacidad de almacenar 7 días de consumo: `DIAS_DE_CAPACIDAD`, en `apps/api/src/emparejamiento.ts`.

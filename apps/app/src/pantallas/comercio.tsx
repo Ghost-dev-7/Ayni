@@ -1,4 +1,4 @@
-import { CATALOGO, CATEGORIAS, DIAS_MINIMOS_PARA_PUBLICAR, UNIDADES, buscarEnCatalogo, etiquetaUnidad, type Categoria, type Unidad } from '@ayni/shared';
+import { CATALOGO, CATEGORIAS, DIAS_MINIMOS_PARA_PUBLICAR, UNIDADES, aKgProducto, buscarEnCatalogo, etiquetaUnidad, type Categoria, type Unidad } from '@ayni/shared';
 import { useState, type FormEvent } from 'react';
 import { api, type DonacionN } from '../api.ts';
 import { Cabecera, Chip, Estado, Marco, nombreEstado, tonoEstado, type Pestana } from '../componentes.tsx';
@@ -41,7 +41,8 @@ export function ComercioInicio({ sesion }: { sesion: Sesion }) {
         {(todas) => {
           const mias = todas.filter((d) => d.comercioId === sesion.id);
           const recogidas = mias.filter((d) => d.estado === 'recogida' && ahora.getTime() - new Date(d.creadaEn).getTime() <= DIAS_28);
-          const kg = recogidas.filter((d) => d.unidad === 'kg').reduce((s, d) => s + (d.cantidadRecibida ?? 0), 0);
+          // Todo se convierte a kilos equivalentes (con un peso aproximado por unidad) para poder sumar productos distintos.
+          const kg = recogidas.reduce((s, d) => s + aKgProducto(d.cantidadRecibida ?? 0, d.unidad, d.producto), 0);
           const activas = mias.filter((d) => d.estado === 'publicada' || d.estado === 'reservada').sort((a, b) => a.caducaEn.localeCompare(b.caducaEn));
           const cerradas = mias.filter((d) => d.estado === 'recogida' || d.estado === 'vencida').slice(0, 6);
           const sinDonar = mias.filter((d) => d.estado === 'vencida').length;
@@ -221,7 +222,7 @@ export function ComercioPublicar({ sesion }: { sesion: Sesion }) {
         <div className="row">
           <label className="field grow">
             <span>Cantidad ({ref ? etiquetaUnidad(ref.nombre, ref.unidad) : unidad})</span>
-            <input className="input" type="number" min={unidad === 'unidades' ? '1' : '0.1'} step={unidad === 'unidades' ? '1' : '0.1'} value={cantidad} onChange={(e) => setCantidad(e.target.value)} required />
+            <input className="input" type="number" min="1" step="1" inputMode="numeric" value={cantidad} onChange={(e) => setCantidad(e.target.value)} required />
           </label>
           <label className="field grow">
             <span>Unidad</span>

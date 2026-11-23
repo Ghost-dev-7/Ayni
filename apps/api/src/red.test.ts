@@ -161,6 +161,35 @@ describe('API de emparejamiento e inventario', () => {
     assert.equal(r.json().requiereFrio, true);
   });
 
+  it('todas las cantidades son enteros: se rechazan los decimales con un mensaje claro', async () => {
+    const decimal = await app.inject({
+      method: 'POST',
+      url: '/api/donaciones',
+      payload: { comercioId: 1, producto: 'Arroz', categoria: 'abarrotes', cantidad: 2.5, unidad: 'kg', caducaEn: enHoras(24 * 4), ventanaDesde: enHoras(0), ventanaHasta: enHoras(3), requiereFrio: false },
+    });
+    assert.equal(decimal.statusCode, 400);
+    assert.match(decimal.json().detalles[0].mensaje, /números enteros/);
+
+    const { id } = await publicar({ producto: 'Arroz', categoria: 'abarrotes', cantidad: 20, unidad: 'kg' });
+    await app.inject({ method: 'POST', url: `/api/donaciones/${id}/reservar`, payload: { comedorId: 1, reservadoPor: 'Rosa M.' } });
+    const recogida = await app.inject({ method: 'POST', url: `/api/donaciones/${id}/recoger`, payload: { comedorId: 1, recogidoPor: 'Rosa M.', cantidadRecibida: 7.5, estadoOk: true } });
+    assert.equal(recogida.statusCode, 400);
+
+    const consumo = await app.inject({ method: 'POST', url: '/api/comedores/1/inventario/consumos', payload: { producto: 'Cebollas', unidad: 'kg', cantidad: 1.5 } });
+    assert.equal(consumo.statusCode, 400);
+    assert.match(consumo.json().detalles[0].mensaje, /números enteros/);
+  });
+
+  it('el emparejamiento explica las distancias sin decimales', async () => {
+    const { id } = await publicar();
+    const lista = (await app.inject({ url: `/api/donaciones/${id}/sugerencias` })).json() as { razones: string[] }[];
+    for (const s of lista) {
+      const frase = s.razones.find((r) => r.startsWith('Cercanía'))!;
+      assert.match(frase, /\d+ (m|km) del comercio/);
+      assert.ok(!/\d,\d/.test(frase), frase);
+    }
+  });
+
   it('crea un borrador desde texto libre sin publicar nada', async () => {
     const antes = ((await app.inject({ url: '/api/donaciones' })).json() as unknown[]).length;
     const r = await app.inject({ method: 'POST', url: '/api/donaciones/borrador', payload: { texto: '20 panes de ayer, recojo hasta las 6pm' } });

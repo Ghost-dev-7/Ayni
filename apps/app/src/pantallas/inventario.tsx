@@ -87,7 +87,7 @@ export function ComedorInventario({ sesion }: { sesion: Sesion }) {
                         <div className="grow">
                           <b>{p.producto}</b>
                           <div className="small" style={{ color: p.bajoMinimo ? 'var(--red)' : 'var(--muted)', fontWeight: p.bajoMinimo ? 700 : 400 }}>
-                            {cantidadTexto(p.total, p.unidad, p.producto)} · {p.lotes} {p.lotes === 1 ? 'lote' : 'lotes'}
+                            {cantidadTexto(p.total, p.unidad, p.producto)}{p.lotes > 1 ? ` · ${p.lotes} lotes` : ''}
                           </div>
                           <div className="row" style={{ marginTop: 4, flexWrap: 'wrap' }}>
                             {p.bajoMinimo && <Chip tono="red">{p.total === 0 ? 'Agotado' : `Stock bajo: menos de ${STOCK_MINIMO}`}</Chip>}
@@ -96,9 +96,9 @@ export function ComedorInventario({ sesion }: { sesion: Sesion }) {
                         </div>
                         {p.total > 0 && <button className="btn sm ghost" type="button" onClick={() => consumir(clave(p))} aria-label={`Registrar consumo de ${p.producto}`}>Consumir</button>}
                       </div>
-                      {lotes.length > 0 && (
+                      {lotes.length > 1 && (
                         <details style={{ marginTop: 8 }}>
-                          <summary className="small" style={{ cursor: 'pointer', fontWeight: 600 }}>Ver lotes (se usa primero el que vence antes)</summary>
+                          <summary className="small" style={{ cursor: 'pointer', fontWeight: 600 }}>Ver los {lotes.length} lotes (se usa primero el que vence antes)</summary>
                           <div className="stack" style={{ marginTop: 8 }}>
                             {lotes.map((l) => {
                               const sl = semaforo(l.nivelCaducidad);
@@ -170,7 +170,7 @@ function FormConsumo({ comedorId, productos, inicial, alGuardar }: { comedorId: 
       </label>
       <label className="field">
         <span>Cantidad consumida ({p ? (p.unidad === 'unidades' ? 'unidades' : p.unidad) : ''})</span>
-        <input className="input" type="number" min={p?.unidad === 'unidades' ? '1' : '0.1'} step={p?.unidad === 'unidades' ? '1' : '0.1'} max={p?.total} value={cantidad} onChange={(e) => setCantidad(e.target.value)} required />
+        <input className="input" type="number" min="1" step="1" inputMode="numeric" max={p?.total} value={cantidad} onChange={(e) => setCantidad(e.target.value)} required />
       </label>
       {p && quedaria !== null && quedaria >= 0 && (
         <div className="small" style={{ color: quedaria < STOCK_MINIMO ? 'var(--red)' : 'var(--muted)', fontWeight: quedaria < STOCK_MINIMO ? 700 : 400 }}>

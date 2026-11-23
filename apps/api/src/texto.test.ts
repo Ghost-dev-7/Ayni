@@ -71,9 +71,14 @@ describe('interpretarTexto', () => {
     assert.equal(interpretarTexto('30 latas de leche evaporada', AHORA).requiereFrio, false);
   });
 
-  it('acepta decimales con coma o con punto', () => {
-    assert.equal(interpretarTexto('2,5 kg de tomates', AHORA).cantidad, 2.5);
-    assert.equal(interpretarTexto('2.5 kg de tomates', AHORA).cantidad, 2.5);
+  it('solo trabaja con enteros: redondea un decimal (con coma o con punto) y lo avisa', () => {
+    for (const frase of ['2,5 kg de tomates', '2.5 kg de tomates']) {
+      const b = interpretarTexto(frase, AHORA);
+      assert.equal(b.cantidad, 3, frase);
+      assert.ok(b.advertencias.some((a) => a.includes('números enteros') && a.includes('2,5')), frase);
+    }
+    assert.equal(interpretarTexto('0,3 kg de tomates', AHORA).cantidad, 1); // nunca queda en cero
+    assert.deepEqual(interpretarTexto('12 kg de tomates', AHORA).advertencias.filter((a) => a.includes('enteros')), []);
   });
 
   it('entiende vencimientos relativos: en N horas y en N días', () => {

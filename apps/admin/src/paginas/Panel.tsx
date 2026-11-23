@@ -28,7 +28,7 @@ export function Panel() {
             <>
               <section className="kpis">
                 <div className="kpi"><small>Kilos rescatados</small><b>{Math.round(i.kgRescatados).toLocaleString('es-PE')}</b><span className="delta">{i.comedoresAtendidos} comedores atendidos</span></div>
-                <div className="kpi"><small>Raciones equivalentes*</small><b>{i.racionesEquivalentes.toLocaleString('es-PE')}</b><span className="delta">1 ración ≈ {String(i.kgPorRacion).replace('.', ',')} kg</span></div>
+                <div className="kpi"><small>Raciones equivalentes*</small><b>{i.racionesEquivalentes.toLocaleString('es-PE')}</b><span className="delta">1 kg ≈ {Math.round(1 / i.kgPorRacion)} raciones</span></div>
                 <div className="kpi"><small>Recogidas antes de vencer</small><b>{i.porcentajeAntesDeVencer === null ? '—' : `${i.porcentajeAntesDeVencer} %`}</b><span className="delta">{i.porEstado.recogida} recogidas · {i.porEstado.vencida} vencidas</span></div>
                 <div className="kpi"><small>Tiempo medio publicar → recoger</small><b>{duracion(i.tiempoMedioMin)}</b><span className="delta">en las recogidas del período</span></div>
               </section>
@@ -92,7 +92,7 @@ export function Panel() {
           </div>
         )}
       </Estado>
-      <p className="hint">* Equivalencia de raciones: supuesto de demostración (1 ración ≈ 0,5 kg). Todas las cifras salen de datos sintéticos.</p>
+      <p className="hint">* Equivalencia de raciones: supuesto de demostración (1 kg ≈ 2 raciones). Todas las cifras salen de datos sintéticos.</p>
     </>
   );
 }

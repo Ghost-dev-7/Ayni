@@ -158,6 +158,7 @@ export function sembrar(db: BD, ahora: Date = new Date()): ResumenSemilla {
     const candidatos = productos.filter((p) => !p.frio || k.refrigeracion);
     const elegidos = new Set<ProductoBase>();
     while (elegidos.size < 6) elegidos.add(azar.elegir(candidatos));
+    let conSegundoLote = 0;
     for (const p of elegidos) {
       const secos = DIAS_SECOS.includes(p.categoria);
       // Lo perecedero tiene de 3 a 5 días de vida; los secos (arroz, menestras, latas), meses.
@@ -169,6 +170,17 @@ export function sembrar(db: BD, ahora: Date = new Date()): ResumenSemilla {
         { producto: p.nombre, categoria: p.categoria, unidad: p.unidad, cantidad, caducaEn: iso(t0 + horas * H) },
         { origen: 'manual', motivo: 'Inventario inicial', actor: k.nombre, ahora: new Date(t0 - azar.entero(1, 5) * DIA), sinEvento: true },
       );
+      // Dos productos por comedor tienen un segundo lote que vence después: así se ve cómo se usa primero el que vence antes.
+      if (cantidad >= 14 && conSegundoLote < 2) {
+        conSegundoLote++;
+        const horas2 = secos ? horas + azar.entero(30, 90) * 24 : horas + azar.entero(24, 60);
+        registrarEntrada(
+          db,
+          k.id,
+          { producto: p.nombre, categoria: p.categoria, unidad: p.unidad, cantidad: azar.entero(8, 40), caducaEn: iso(t0 + horas2 * H) },
+          { origen: 'manual', motivo: 'Inventario inicial', actor: k.nombre, ahora: new Date(t0 - azar.entero(0, 2) * DIA), sinEvento: true },
+        );
+      }
     }
   }
 

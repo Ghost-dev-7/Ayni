@@ -179,6 +179,13 @@ export function interpretarTexto(texto: string, ahora: Date = new Date()): Borra
   const advertencias: string[] = [];
 
   const cant = leerCantidad(t);
+  // Todas las cantidades son números enteros: un decimal se redondea y se avisa.
+  let cantidadFinal = cant?.cantidad ?? null;
+  if (cantidadFinal !== null && !Number.isInteger(cantidadFinal)) {
+    const redondeada = Math.max(1, Math.round(cantidadFinal));
+    advertencias.push(`Las cantidades son números enteros: cambié ${String(cantidadFinal).replace('.', ',')} por ${redondeada}.`);
+    cantidadFinal = redondeada;
+  }
   const entradaProducto = buscarProducto(cant ? cant.resto : t);
 
   let producto: string;
@@ -195,7 +202,7 @@ export function interpretarTexto(texto: string, ahora: Date = new Date()): Borra
     requiereFrio = requiereFrio || Boolean(ref?.requiereFrio ?? entradaProducto.frio);
     if (cant?.unidad && cant.unidad !== unidad) {
       const como = unidad === 'unidades' ? (ref?.etiqueta ?? 'unidades') : unidad;
-      advertencias.push(`${producto} se registra por ${como}: puse ${cant.cantidad} ${como}. Revisa la cantidad.`);
+      advertencias.push(`${producto} se registra por ${como}: puse ${cantidadFinal} ${como}. Revisa la cantidad.`);
     }
   } else {
     // Producto desconocido: se toma lo que sigue a la cantidad como nombre y se avisa.
@@ -238,7 +245,7 @@ export function interpretarTexto(texto: string, ahora: Date = new Date()): Borra
   return {
     producto,
     categoria,
-    cantidad: cant?.cantidad ?? null,
+    cantidad: cantidadFinal,
     unidad,
     caducaEn: caducidad.fecha.toISOString(),
     ventanaHasta: ventanaHasta.toISOString(),

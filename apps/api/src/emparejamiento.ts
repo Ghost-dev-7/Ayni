@@ -62,7 +62,8 @@ export interface EntradaPuntaje {
   ahora: Date;
 }
 
-const nombreKm = (km: number) => `${km.toFixed(1).replace('.', ',')} km`;
+/** Distancia sin decimales: "700 m" por debajo de 1 km, "2 km" desde ahí. */
+export const nombreKm = (km: number) => (km < 1 ? `${Math.max(10, Math.round((km * 1000) / 10) * 10)} m` : `${Math.round(km)} km`);
 
 export function puntuar(e: EntradaPuntaje): Sugerencia {
   const { donacion: d, comedor: c, ahora } = e;

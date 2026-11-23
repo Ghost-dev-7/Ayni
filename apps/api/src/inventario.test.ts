@@ -176,6 +176,20 @@ describe('inventario', () => {
     assert.equal(c.bajoMinimo[0]!.minimo, 10);
   });
 
+  it('con los datos sintéticos algunos productos tienen 2 lotes y otros 1, y todo son enteros', () => {
+    sembrar(db, AHORA);
+    for (let id = 1; id <= 8; id++) {
+      const inv = obtenerInventario(db, id, AHORA);
+      assert.ok(inv.productos.some((p) => p.lotes === 2), `el comedor ${id} no tiene productos con 2 lotes`);
+      assert.ok(inv.productos.some((p) => p.lotes === 1), `el comedor ${id} no tiene productos con 1 lote`);
+      assert.ok(inv.lotes.every((l) => Number.isInteger(l.cantidad)));
+      // En un producto con 2 lotes, el primero en usarse es el que vence antes.
+      const doble = inv.productos.find((p) => p.lotes === 2)!;
+      const suyos = inv.lotes.filter((l) => l.producto === doble.producto);
+      assert.ok(suyos[0]!.caducaEn! < suyos[1]!.caducaEn!);
+    }
+  });
+
   it('con los datos sintéticos cada comedor tiene inventario y algunas alertas', () => {
     sembrar(db, AHORA);
     const central = inventarioCentral(db, AHORA);

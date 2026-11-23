@@ -2,6 +2,9 @@ import { z } from 'zod';
 
 export * from './catalogo.ts';
 
+// Todas las cantidades son números enteros: así nadie se confunde con decimales.
+const entero = z.number().int({ message: 'Usa números enteros, sin decimales.' }).positive({ message: 'La cantidad debe ser mayor que cero.' }).max(100000);
+
 export const CATEGORIAS = [
   'panaderia',
   'verduras',
@@ -66,7 +69,7 @@ export const donacionInputSchema = z
     comercioId: z.number().int().positive(),
     producto: z.string().trim().min(2).max(80),
     categoria: categoriaSchema,
-    cantidad: z.number().positive().max(100000),
+    cantidad: entero,
     unidad: unidadSchema,
     /** Fecha y hora de caducidad (ISO 8601). */
     caducaEn: z.string().datetime({ offset: true }),
@@ -108,7 +111,7 @@ export type ReservarInput = z.infer<typeof reservarInputSchema>;
 export const recogerInputSchema = z.object({
   comedorId: z.number().int().positive(),
   recogidoPor: z.string().trim().min(2).max(80),
-  cantidadRecibida: z.number().positive().max(100000),
+  cantidadRecibida: entero,
   estadoOk: z.literal(true, { errorMap: () => ({ message: 'Debes confirmar que el producto está en buen estado.' }) }),
 });
 export type RecogerInput = z.infer<typeof recogerInputSchema>;
@@ -178,7 +181,7 @@ export const entradaInventarioSchema = z.object({
   producto: z.string().trim().min(2).max(80),
   categoria: categoriaSchema,
   unidad: unidadSchema,
-  cantidad: z.number().positive().max(100000),
+  cantidad: entero,
   caducaEn: z.string().datetime({ offset: true }).nullable().optional(),
   motivo: z.string().trim().max(120).optional(),
 });
@@ -188,7 +191,7 @@ export type EntradaInventario = z.infer<typeof entradaInventarioSchema>;
 export const consumoInventarioSchema = z.object({
   producto: z.string().trim().min(2).max(80),
   unidad: unidadSchema,
-  cantidad: z.number().positive().max(100000),
+  cantidad: entero,
   motivo: z.string().trim().max(120).optional(),
 });
 export type ConsumoInventario = z.infer<typeof consumoInventarioSchema>;

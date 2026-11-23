@@ -288,7 +288,7 @@ export function TarjetaReserva({ d, comedor, comercio, ahora, alCambiar }: { d: 
         </div>
         <label className="field">
           <span>Cantidad recibida ({d.unidad === 'unidades' ? 'unidades' : d.unidad})</span>
-          <input className="input" type="number" min="0.1" max={d.cantidad} step="0.1" value={cantidad} onChange={(e) => setCantidad(e.target.value)} required />
+          <input className="input" type="number" min="1" max={d.cantidad} step="1" inputMode="numeric" value={cantidad} onChange={(e) => setCantidad(e.target.value)} required />
         </label>
         <label className="field">
           <span>Recibido por</span>

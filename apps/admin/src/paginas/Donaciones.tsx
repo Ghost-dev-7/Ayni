@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react';
 import { api } from '../api.ts';
 import { Chip, Encabezado, Estado, nombreEstado, tonoEstado } from '../componentes.tsx';
 import { useCarga } from '../carga.ts';
-import { ICONO, cantidadTexto, claseSemaforo, fechaHora, textoVence } from '../formato.ts';
+import { ICONO, cantidadTexto, claseSemaforo, fechaHora, km, textoVence } from '../formato.ts';
 
 const FILTROS = [
   { id: '', etiqueta: 'Todas' },
@@ -53,7 +53,7 @@ function Sugerencias({ donacionId, alAsignar }: { donacionId: number; alAsignar:
                   <b>{n + 1}. {s.nombre.replace('Comedor ', '')}</b>
                   {s.elegible ? <Chip tono="green">{s.puntaje} / 100</Chip> : <Chip tono="red">No elegible</Chip>}
                 </div>
-                <div className="tiny muted">{s.zona} · {String(s.distanciaKm).replace('.', ',')} km</div>
+                <div className="tiny muted">{s.zona} · {km(s.distanciaKm)}</div>
                 {COMPONENTES.map((c) => (
                   <div className="bar-row" key={c.clave} style={{ gridTemplateColumns: '70px 1fr 28px' }}>
                     <span>{c.etiqueta}</span>
