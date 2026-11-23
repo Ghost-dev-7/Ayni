@@ -1,0 +1,14 @@
+[
+  { "nombre": "Panadería El Trigal", "tipo": "panaderia", "direccion": "Av. Central, sector 1 (dirección ficticia)", "lat": -12.2102, "lng": -76.9368 },
+  { "nombre": "Panadería La Espiga", "tipo": "panaderia", "direccion": "Av. Revolución, sector 3 (dirección ficticia)", "lat": -12.2178, "lng": -76.9421 },
+  { "nombre": "Bodega Doña Rita", "tipo": "bodega", "direccion": "Calle 12, sector 2 (dirección ficticia)", "lat": -12.2141, "lng": -76.9334 },
+  { "nombre": "Bodega Los Andes", "tipo": "bodega", "direccion": "Calle 4, sector 5 (dirección ficticia)", "lat": -12.2236, "lng": -76.9289 },
+  { "nombre": "Mercado Mi Barrio (puesto 12)", "tipo": "mercado", "direccion": "Mercado zonal, sector 1 (dirección ficticia)", "lat": -12.2125, "lng": -76.9402 },
+  { "nombre": "Mercado Mi Barrio (puesto 31)", "tipo": "mercado", "direccion": "Mercado zonal, sector 1 (dirección ficticia)", "lat": -12.2127, "lng": -76.9399 },
+  { "nombre": "Minimarket Sol Naciente", "tipo": "minimarket", "direccion": "Av. Pastor Sevilla, sector 2 (dirección ficticia)", "lat": -12.2201, "lng": -76.9312 },
+  { "nombre": "Minimarket Amanecer", "tipo": "minimarket", "direccion": "Av. Separadora, sector 6 (dirección ficticia)", "lat": -12.2298, "lng": -76.9255 },
+  { "nombre": "Restaurante Sabor Criollo", "tipo": "restaurante", "direccion": "Av. Central, sector 3 (dirección ficticia)", "lat": -12.2165, "lng": -76.9395 },
+  { "nombre": "Restaurante El Fogón", "tipo": "restaurante", "direccion": "Calle 20, sector 4 (dirección ficticia)", "lat": -12.2189, "lng": -76.9356 },
+  { "nombre": "Pastelería Dulce Hogar", "tipo": "panaderia", "direccion": "Calle 8, sector 3 (dirección ficticia)", "lat": -12.2159, "lng": -76.9428 },
+  { "nombre": "Distribuidora Andina", "tipo": "mayorista", "direccion": "Av. Industrial, sector 6 (dirección ficticia)", "lat": -12.2315, "lng": -76.9231 }
+]

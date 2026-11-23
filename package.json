@@ -1,0 +1,23 @@
+{
+  "name": "ayni",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Ayni: conecta comercios con alimentos por vencer y comedores populares de Villa El Salvador.",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "api": "npm run dev -w @ayni/api",
+    "seed": "npm run seed -w @ayni/api",
+    "test": "npm run test -w @ayni/api",
+    "typecheck": "tsc --noEmit -p apps/api && tsc --noEmit -p packages/shared"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
