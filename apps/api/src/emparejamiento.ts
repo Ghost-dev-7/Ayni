@@ -80,7 +80,7 @@ export function puntuar(e: EntradaPuntaje): Sugerencia {
 
   const horas = Math.max(0, horasRestantes(d.caducaEn, ahora));
   const razones = [
-    `Urgencia ${componentes.urgencia}: vence en ${horas < 1 ? `${Math.round(horas * 60)} min` : `${Math.round(horas)} h`}.`,
+    `Urgencia ${componentes.urgencia}: vence en ${horas < 1 ? `${Math.round(horas * 60)} min` : horas < 48 ? `${Math.round(horas)} h` : `${Math.round(horas / 24)} días`}.`,
     `Cercanía ${componentes.cercania}: está a ${nombreKm(km)} del comercio.`,
     declarada
       ? 'Necesidad 100: es una categoría prioritaria para el comedor.'

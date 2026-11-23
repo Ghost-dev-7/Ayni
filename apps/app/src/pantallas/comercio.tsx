@@ -1,4 +1,4 @@
-import { CATALOGO, CATEGORIAS, UNIDADES, buscarEnCatalogo, etiquetaUnidad, type Categoria, type Unidad } from '@ayni/shared';
+import { CATALOGO, CATEGORIAS, DIAS_MINIMOS_PARA_PUBLICAR, UNIDADES, buscarEnCatalogo, etiquetaUnidad, type Categoria, type Unidad } from '@ayni/shared';
 import { useState, type FormEvent } from 'react';
 import { api, type DonacionN } from '../api.ts';
 import { Cabecera, Chip, Estado, Marco, nombreEstado, tonoEstado, type Pestana } from '../componentes.tsx';
@@ -102,7 +102,7 @@ export function ComercioPublicar({ sesion }: { sesion: Sesion }) {
   const [categoria, setCategoria] = useState<Categoria>('panaderia');
   const [cantidad, setCantidad] = useState('10');
   const [unidad, setUnidad] = useState<Unidad>('unidades');
-  const [caduca, setCaduca] = useState(aInputLocal(new Date(inicio.getTime() + 6 * 3_600_000)));
+  const [caduca, setCaduca] = useState(aInputLocal(new Date(inicio.getTime() + (DIAS_MINIMOS_PARA_PUBLICAR + 1) * 24 * 3_600_000)));
   const [hasta, setHasta] = useState(aInputLocal(new Date(inicio.getTime() + 5 * 3_600_000)));
   const [frio, setFrio] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -180,7 +180,7 @@ export function ComercioPublicar({ sesion }: { sesion: Sesion }) {
         </div>
         <label className="field" style={{ marginTop: 8 }}>
           <span className="sr-only">Describe la donación</span>
-          <textarea className="input" value={frase} onChange={(e) => setFrase(e.target.value)} placeholder="Ej.: 20 panes de ayer, recojo hasta las 6pm" />
+          <textarea className="input" value={frase} onChange={(e) => setFrase(e.target.value)} placeholder="Ej.: 20 panes que vencen en 4 días, recojo hasta las 6pm" />
         </label>
         <button type="button" className="btn amber block" style={{ marginTop: 10 }} disabled={creando || frase.trim().length < 3} onClick={crearBorrador}>
           {creando ? 'Leyendo…' : 'Crear borrador'}
@@ -232,7 +232,8 @@ export function ComercioPublicar({ sesion }: { sesion: Sesion }) {
         </div>
         <label className="field">
           <span>Fecha y hora de caducidad</span>
-          <input className="input" type="datetime-local" value={caduca} onChange={(e) => setCaduca(e.target.value)} required />
+          <input className="input" type="datetime-local" value={caduca} min={aInputLocal(new Date(inicio.getTime() + DIAS_MINIMOS_PARA_PUBLICAR * 24 * 3_600_000))} onChange={(e) => setCaduca(e.target.value)} required />
+          <span className="hint" style={{ display: 'block' }}>Solo se publican productos que venzan en {DIAS_MINIMOS_PARA_PUBLICAR} días o más.</span>
         </label>
         <label className="field">
           <span>Recojo hasta</span>

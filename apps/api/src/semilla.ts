@@ -108,7 +108,8 @@ export function sembrar(db: BD, ahora: Date = new Date()): ResumenSemilla {
     const candidatos = productos.filter((p) => CATEGORIAS_POR_TIPO[comercio.tipo].includes(p.categoria));
     const producto = azar.elegir(candidatos);
     const cantidad = producto.unidad === 'kg' ? azar.entero(3, 30) : producto.unidad === 'litros' ? azar.entero(5, 40) : azar.entero(20, 80);
-    const ventanaHasta = Math.max(plan.caducaMs - 30 * 60_000, plan.creadaMs + 60 * 60_000);
+    // El comercio da entre 6 y 36 horas para recoger, y nunca más allá de la caducidad.
+    const ventanaHasta = Math.min(plan.creadaMs + azar.entero(6, 36) * H, plan.caducaMs - 30 * 60_000);
     const aptos = comedores.filter((k) => k.activo && (!producto.frio || k.refrigeracion));
     const comedor = plan.estado === 'publicada' || plan.estado === 'vencida' ? null : azar.elegir(aptos);
     const codigo = codigoDonacion(id);
@@ -134,17 +135,18 @@ export function sembrar(db: BD, ahora: Date = new Date()): ResumenSemilla {
 
   // Historial de 4 semanas: 30 donaciones ya cerradas (recogidas o vencidas).
   for (let i = 0; i < 30; i++) {
-    const creadaMs = t0 - azar.entero(1, 27) * DIA - azar.entero(0, 10) * H;
-    const caducaMs = creadaMs + azar.entero(6, 40) * H;
+    // Cada producto se publicó con 3 a 5 días de vida (la regla del sistema exige 3 como mínimo).
+    const creadaMs = t0 - azar.entero(6, 27) * DIA - azar.entero(0, 10) * H;
+    const caducaMs = creadaMs + azar.entero(3 * 24 + 1, 5 * 24) * H;
     crear({ creadaMs, caducaMs, estado: azar.siguiente() < 0.88 ? 'recogida' : 'vencida' });
   }
 
-  // Donaciones de hoy, con urgencias distintas: 7 publicadas, 3 reservadas.
-  const horasRestantes = [2, 4, 9, 20, 30, 52, 70, 3, 14, 26];
-  horasRestantes.forEach((h, i) => {
+  // Donaciones de hoy, con vencimientos de 3 a 5 días: 7 publicadas, 3 reservadas.
+  const diasRestantes = [3.1, 3.3, 3.6, 3.9, 4.2, 4.5, 4.8, 3.2, 4.0, 4.4];
+  diasRestantes.forEach((d, i) => {
     crear({
       creadaMs: t0 - azar.entero(10, 120) * 60_000,
-      caducaMs: t0 + h * H,
+      caducaMs: t0 + d * DIA,
       estado: i < 7 ? 'publicada' : 'reservada',
     });
   });
@@ -158,7 +160,8 @@ export function sembrar(db: BD, ahora: Date = new Date()): ResumenSemilla {
     while (elegidos.size < 6) elegidos.add(azar.elegir(candidatos));
     for (const p of elegidos) {
       const secos = DIAS_SECOS.includes(p.categoria);
-      const horas = secos ? azar.entero(90, 300) * 24 : p.categoria === 'panaderia' ? azar.entero(6, 40) : azar.entero(24, 8 * 24);
+      // Lo perecedero tiene de 3 a 5 días de vida; los secos (arroz, menestras, latas), meses.
+      const horas = secos ? azar.entero(90, 300) * 24 : azar.entero(3 * 24, 5 * 24);
       const cantidad = azar.siguiente() < 0.3 ? azar.entero(3, 9) : p.unidad === 'unidades' ? azar.entero(14, 120) : azar.entero(12, 70);
       registrarEntrada(
         db,

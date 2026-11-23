@@ -1,6 +1,7 @@
 import cors from '@fastify/cors';
 import {
   activoInputSchema,
+  DIAS_MINIMOS_PARA_PUBLICAR,
   buscarEnCatalogo,
   borradorInputSchema,
   comedorInputSchema,
@@ -16,7 +17,7 @@ import {
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { abrirBD, type BD } from './bd.ts';
-import { nivelCaducidad, puedePublicar } from './caducidad.ts';
+import { cumpleVidaMinima, nivelCaducidad, puedePublicar } from './caducidad.ts';
 import { interpretarTexto } from './texto.ts';
 import { ofertasParaComedor, sugerirComedores } from './emparejamiento.ts';
 import { registrarEvento } from './eventos.ts';
@@ -110,6 +111,10 @@ export function construirApi(db: BD, reloj: () => Date = () => new Date()): Fast
     // Regla de seguridad alimentaria: no se publica un producto vencido.
     if (!puedePublicar(datos.caducaEn, ahora)) {
       return reply.status(422).send({ error: 'No se puede publicar un producto ya vencido.' });
+    }
+    // Para que el comedor alcance a recogerlo y usarlo, el producto debe vencer en 3 días o más.
+    if (!cumpleVidaMinima(datos.caducaEn, ahora)) {
+      return reply.status(422).send({ error: `Solo se pueden publicar productos que venzan en ${DIAS_MINIMOS_PARA_PUBLICAR} días o más.` });
     }
     // Cada producto del catálogo tiene una sola unidad en todo el sistema.
     const ref = buscarEnCatalogo(datos.producto);

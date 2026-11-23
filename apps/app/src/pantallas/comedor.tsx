@@ -21,31 +21,6 @@ function Puntaje({ valor, elegible }: { valor: number; elegible: boolean }) {
   );
 }
 
-/** Lo que el comedor declara sobre sí mismo (raciones, frío y horario). El emparejamiento lo usa para calcular la capacidad. */
-function DatosComedor({ comedor, alGuardar }: { comedor: Comedor; alGuardar: (cambios: Partial<ComedorPerfil>) => Promise<void> }) {
-  const [raciones, setRaciones] = useState(String(comedor.racionesDia));
-  const [frio, setFrio] = useState(comedor.refrigeracion);
-  const [horario, setHorario] = useState(comedor.horarioRecojo);
-  const [listo, setListo] = useState(false);
-
-  const guardar = async (e: FormEvent) => {
-    e.preventDefault();
-    setListo(false);
-    await alGuardar({ racionesDia: Number(raciones), refrigeracion: frio, horarioRecojo: horario });
-    setListo(true);
-  };
-
-  return (
-    <form className="stack" style={{ marginTop: 10 }} onSubmit={guardar}>
-      <label className="field"><span>Raciones por día</span><input className="input" type="number" min="1" value={raciones} onChange={(e) => { setRaciones(e.target.value); setListo(false); }} required /></label>
-      <div className="checks"><label><input type="checkbox" checked={frio} onChange={(e) => { setFrio(e.target.checked); setListo(false); }} /> Tenemos refrigeración</label></div>
-      <label className="field"><span>Horario de recojo</span><input className="input" value={horario} onChange={(e) => { setHorario(e.target.value); setListo(false); }} required minLength={3} /></label>
-      <button className="btn sm" type="submit">Guardar datos</button>
-      {listo && <div className="aviso ok" role="status">✓ Datos guardados. Tus ofertas ya los usan.</div>}
-    </form>
-  );
-}
-
 export function ComedorOfertas({ sesion }: { sesion: Sesion }) {
   const comedores = useCarga(api.comedores);
   const ofertas = useCarga(() => api.ofertas(sesion.id), [sesion.id], 10_000);
@@ -113,10 +88,11 @@ export function ComedorOfertas({ sesion }: { sesion: Sesion }) {
         </div>
         {errorPref && <div className="aviso error" role="alert" style={{ marginTop: 8 }}>{errorPref}</div>}
         {comedor && (
-          <details style={{ marginTop: 12 }}>
-            <summary className="small" style={{ fontWeight: 700, cursor: 'pointer' }}>Datos de mi comedor</summary>
-            <DatosComedor key={comedor.id} comedor={comedor} alGuardar={guardarPerfil} />
-          </details>
+          <div className="checks" style={{ marginTop: 6 }}>
+            <label>
+              <input type="checkbox" checked={comedor.refrigeracion} disabled={guardando} onChange={(e) => void guardarPerfil({ refrigeracion: e.target.checked })} /> Tenemos refrigeración
+            </label>
+          </div>
         )}
       </section>
 

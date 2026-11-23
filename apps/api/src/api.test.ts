@@ -23,7 +23,7 @@ describe('API', () => {
     categoria: 'panaderia',
     cantidad: 20,
     unidad: 'unidades',
-    caducaEn: enHoras(5),
+    caducaEn: enHoras(24 * 4),
     ventanaDesde: enHoras(0),
     ventanaHasta: enHoras(4),
     requiereFrio: false,
@@ -56,6 +56,25 @@ describe('API', () => {
       payload: donacion({ caducaEn: enHoras(-1), ventanaDesde: enHoras(-3), ventanaHasta: enHoras(-2) }),
     });
     assert.equal(r.statusCode, 422);
+  });
+
+  it('no se publica un producto que venza en menos de 3 días, pero sí uno que dure más', async () => {
+    const corto = await app.inject({ method: 'POST', url: '/api/donaciones', payload: donacion({ caducaEn: enHoras(24 * 2), ventanaHasta: enHoras(24) }) });
+    assert.equal(corto.statusCode, 422);
+    assert.match(corto.json().error, /3 días o más/);
+    const justo = await app.inject({ method: 'POST', url: '/api/donaciones', payload: donacion({ caducaEn: enHoras(24 * 3), ventanaHasta: enHoras(24 * 2) }) });
+    assert.equal(justo.statusCode, 201);
+    const largo = await app.inject({ method: 'POST', url: '/api/donaciones', payload: donacion({ caducaEn: enHoras(24 * 40), ventanaHasta: enHoras(24 * 30) }) });
+    assert.equal(largo.statusCode, 201);
+  });
+
+  it('los datos de ejemplo publicados hoy vencen entre 3 y 5 días', async () => {
+    const abiertas = (await app.inject({ url: '/api/donaciones?estado=publicada' })).json() as { caducaEn: string }[];
+    assert.ok(abiertas.length > 0);
+    for (const d of abiertas) {
+      const dias = (new Date(d.caducaEn).getTime() - AHORA.getTime()) / (24 * 3_600_000);
+      assert.ok(dias >= 3 && dias <= 5, `vence en ${dias.toFixed(2)} días`);
+    }
   });
 
   it('rechaza datos mal formados con detalle del campo', async () => {

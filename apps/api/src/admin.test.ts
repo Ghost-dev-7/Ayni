@@ -22,7 +22,7 @@ describe('administración', () => {
     categoria: 'panaderia',
     cantidad: 5,
     unidad: 'kg',
-    caducaEn: enHoras(5),
+    caducaEn: enHoras(24 * 4),
     ventanaDesde: enHoras(0),
     ventanaHasta: enHoras(4),
     requiereFrio: false,

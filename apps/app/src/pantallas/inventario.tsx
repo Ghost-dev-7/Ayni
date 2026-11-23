@@ -18,7 +18,7 @@ export function ComedorInventario({ sesion }: { sesion: Sesion }) {
   const inv = useCarga(() => api.inventario(sesion.id), [sesion.id], 8_000);
   const [abierto, setAbierto] = useState(false);
   const [elegido, setElegido] = useState<string | null>(null);
-  const [vista, setVista] = useState<'productos' | 'lotes'>('productos');
+  const [vista, setVista] = useState<'stock' | 'bajo'>('stock');
   const [aviso, setAviso] = useState<{ texto: string; alerta: boolean } | null>(null);
   const ahora = new Date();
 
@@ -37,35 +37,49 @@ export function ComedorInventario({ sesion }: { sesion: Sesion }) {
     <Marco pestanas={PESTANAS} activa="/comedor/inventario">
       <div className="top">
         <b style={{ fontSize: 20, fontFamily: 'var(--serif)' }}>Inventario</b>
-        <button className="btn sm" type="button" onClick={() => (abierto ? setAbierto(false) : consumir(null))}>− Registrar consumo</button>
       </div>
-      <p className="small muted" style={{ marginTop: -6, marginBottom: 10 }}>
+      <p className="small muted" style={{ marginTop: -6, marginBottom: 12 }}>
         El stock sube solo cuando recoges una donación y baja solo cuando registras lo que consumes. Mínimo: <b>{STOCK_MINIMO}</b>; por debajo se marca en rojo.
       </p>
-      {aviso && <div className={`aviso ${aviso.alerta ? 'error' : 'ok'}`} role="status" style={{ marginBottom: 12 }}>{aviso.alerta ? '⚠️' : '✓'} {aviso.texto}</div>}
+
+      <button className="btn red block grande" type="button" aria-expanded={abierto} onClick={() => (abierto ? setAbierto(false) : consumir(null))}>
+        − Registrar consumo
+      </button>
+
+      {aviso && <div className={`aviso ${aviso.alerta ? 'error' : 'ok'}`} role="status" style={{ marginTop: 12 }}>{aviso.alerta ? '⚠️' : '✓'} {aviso.texto}</div>}
 
       <Estado carga={inv}>
-        {(d) => (
-          <>
-            {abierto && <FormConsumo key={elegido ?? 'ninguno'} comedorId={sesion.id} productos={d.productos.filter((p) => p.total > 0)} inicial={elegido} alGuardar={listo} />}
+        {(d) => {
+          const enStock = d.productos.filter((p) => p.total > 0);
+          const bajos = d.productos.filter((p) => p.bajoMinimo);
+          const lista = vista === 'bajo' ? bajos : enStock;
+          return (
+            <>
+              {abierto && <FormConsumo key={elegido ?? 'ninguno'} comedorId={sesion.id} productos={enStock} inicial={elegido} alGuardar={listo} />}
 
-            <div className="stat-grid">
-              <div className="stat"><b>{Math.round(d.resumen.stockKg)} kg</b><span>Stock aproximado (sin lo vencido)</span></div>
-              <div className="stat"><b style={{ color: d.resumen.productosBajoMinimo > 0 ? 'var(--red)' : undefined }}>{d.resumen.productosBajoMinimo}</b><span>Productos bajo {STOCK_MINIMO}</span></div>
-              <div className="stat"><b style={{ color: d.resumen.lotesPorVencer + d.resumen.lotesVencidos > 0 ? 'var(--red)' : undefined }}>{d.resumen.lotesPorVencer + d.resumen.lotesVencidos}</b><span>Lotes por vencer o vencidos</span></div>
-              <div className="stat"><b>{d.productos.filter((p) => p.total > 0).length}</b><span>Productos en stock</span></div>
-            </div>
+              <div className="stat-grid" style={{ marginTop: 14 }} role="group" aria-label="Qué productos ver">
+                <button type="button" className={`stat-btn ${vista === 'bajo' ? 'on' : ''}`} aria-pressed={vista === 'bajo'} onClick={() => setVista('bajo')}>
+                  <b style={{ color: bajos.length > 0 ? 'var(--red)' : undefined }}>{bajos.length}</b>
+                  <span>Productos bajo {STOCK_MINIMO}</span>
+                </button>
+                <button type="button" className={`stat-btn ${vista === 'stock' ? 'on' : ''}`} aria-pressed={vista === 'stock'} onClick={() => setVista('stock')}>
+                  <b>{enStock.length}</b>
+                  <span>Productos en stock</span>
+                </button>
+              </div>
 
-            <div className="seg" role="tablist" style={{ marginTop: 14 }}>
-              <button type="button" role="tab" aria-selected={vista === 'productos'} className={vista === 'productos' ? 'on' : ''} onClick={() => setVista('productos')}>Productos</button>
-              <button type="button" role="tab" aria-selected={vista === 'lotes'} className={vista === 'lotes' ? 'on' : ''} onClick={() => setVista('lotes')}>Lotes (usar primero)</button>
-            </div>
-
-            {vista === 'productos' ? (
-              <div className="stack" style={{ marginTop: 12 }}>
-                {d.productos.length === 0 && <p className="muted small">Todavía no hay productos. Aparecerán cuando recojas una donación.</p>}
-                {d.productos.map((p) => {
+              <div className="section-title">
+                <h2>{vista === 'bajo' ? `Productos bajo ${STOCK_MINIMO}` : 'Productos en stock'} ({lista.length})</h2>
+              </div>
+              <div className="stack" aria-live="polite">
+                {lista.length === 0 && (
+                  <p className="muted small">
+                    {vista === 'bajo' ? `Ningún producto está por debajo de ${STOCK_MINIMO}. ¡Todo en orden!` : 'Todavía no hay productos. Aparecerán cuando recojas una donación.'}
+                  </p>
+                )}
+                {lista.map((p) => {
                   const s = semaforo(p.nivelCaducidad);
+                  const lotes = d.lotes.filter((l) => clave(l) === clave(p));
                   return (
                     <div className="card" key={clave(p)} style={{ padding: 12, borderColor: p.bajoMinimo ? 'var(--red)' : undefined, background: p.bajoMinimo ? 'var(--red-100)' : undefined }}>
                       <div className="row">
@@ -82,30 +96,29 @@ export function ComedorInventario({ sesion }: { sesion: Sesion }) {
                         </div>
                         {p.total > 0 && <button className="btn sm ghost" type="button" onClick={() => consumir(clave(p))} aria-label={`Registrar consumo de ${p.producto}`}>Consumir</button>}
                       </div>
+                      {lotes.length > 0 && (
+                        <details style={{ marginTop: 8 }}>
+                          <summary className="small" style={{ cursor: 'pointer', fontWeight: 600 }}>Ver lotes (se usa primero el que vence antes)</summary>
+                          <div className="stack" style={{ marginTop: 8 }}>
+                            {lotes.map((l) => {
+                              const sl = semaforo(l.nivelCaducidad);
+                              return (
+                                <div className="row between small" key={l.id}>
+                                  <span>{cantidadTexto(l.cantidad, l.unidad, l.producto)} · {l.origen === 'donacion' ? 'de una donación' : 'inventario inicial'} · entró {fechaHora(l.creadoEn)}</span>
+                                  {sl ? <span className={`sem ${sl}`}>{l.caducaEn ? textoVence(l.caducaEn, ahora) : ''}</span> : <Chip tono="gray">Sin fecha</Chip>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </details>
+                      )}
                     </div>
                   );
                 })}
               </div>
-            ) : (
-              <div className="stack" style={{ marginTop: 12 }}>
-                <p className="small muted">Al registrar un consumo se descuenta primero lo que vence antes (PEPS).</p>
-                {d.lotes.map((l) => {
-                  const s = semaforo(l.nivelCaducidad);
-                  return (
-                    <div className="list-item" key={l.id}>
-                      <div className="thumb" aria-hidden="true">{ICONO[l.categoria]}</div>
-                      <div className="grow">
-                        <b>{l.producto}</b>
-                        <div className="small muted">{cantidadTexto(l.cantidad, l.unidad, l.producto)} · {l.origen === 'donacion' ? 'de una donación' : 'inventario inicial'} · entró {fechaHora(l.creadoEn)}</div>
-                      </div>
-                      {s ? <span className={`sem ${s}`}>{l.caducaEn ? textoVence(l.caducaEn, ahora) : ''}</span> : <Chip tono="gray">Sin fecha</Chip>}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
+            </>
+          );
+        }}
       </Estado>
     </Marco>
   );
@@ -125,7 +138,7 @@ function FormConsumo({ comedorId, productos, inicial, alGuardar }: { comedorId: 
     formulario.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }, []);
 
-  if (productos.length === 0) return <div className="aviso" style={{ marginBottom: 14 }}>No hay productos en stock para registrar un consumo.</div>;
+  if (productos.length === 0) return <div className="aviso" style={{ margin: '14px 0' }}>No hay productos en stock para registrar un consumo.</div>;
 
   const n = Number(cantidad);
   const quedaria = p && Number.isFinite(n) ? Math.round((p.total - n) * 1000) / 1000 : null;
@@ -147,7 +160,7 @@ function FormConsumo({ comedorId, productos, inicial, alGuardar }: { comedorId: 
   };
 
   return (
-    <form ref={formulario} className="card stack" style={{ marginBottom: 14, scrollMarginTop: 8 }} onSubmit={enviar}>
+    <form ref={formulario} className="card stack" style={{ margin: '14px 0', scrollMarginTop: 8 }} onSubmit={enviar}>
       <b>Registrar lo que consumiste</b>
       <label className="field">
         <span>Producto</span>

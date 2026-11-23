@@ -52,7 +52,7 @@ export function Panel() {
                 <div className="card">
                   <h2 style={{ fontSize: 19 }}>Alertas</h2>
                   <div className="stack" style={{ marginTop: 12 }}>
-                    <div className="row"><span className={`sem ${hoy.vencenPronto > 0 ? 'r' : 'g'}`} /><div className="small grow"><b>{hoy.vencenPronto} donaciones vencen en menos de 12 h</b><br />{hoy.vencenProntoSinComedor} aún sin comedor asignado</div></div>
+                    <div className="row"><span className={`sem ${hoy.vencenPronto > 0 ? 'r' : 'g'}`} /><div className="small grow"><b>{hoy.vencenPronto} donaciones vencen en 3 días o menos</b><br />{hoy.vencenProntoSinComedor} aún sin comedor asignado</div></div>
                     {hoy.comedoresSinActividad.length === 0 ? (
                       <div className="row"><span className="sem g" /><div className="small grow"><b>Todos los comedores activos</b><br />tienen actividad reciente</div></div>
                     ) : (

@@ -7,7 +7,7 @@
  *
  * El borrador nunca se publica solo: el comercio lo revisa y lo confirma.
  */
-import { buscarEnCatalogo, type BorradorDonacion, type Categoria, type Unidad } from '@ayni/shared';
+import { DIAS_MINIMOS_PARA_PUBLICAR, buscarEnCatalogo, type BorradorDonacion, type Categoria, type Unidad } from '@ayni/shared';
 
 interface EntradaDiccionario {
   claves: string[];
@@ -140,7 +140,7 @@ function leerCaducidad(t: string, ahora: Date): Caducidad {
     return { fecha: finDelDia(ahora, dif), entendida: true };
   }
   if (/\b(del dia|de hoy|fresco|recien horneado)\b/.test(t)) return { fecha: finDelDia(ahora, 1), entendida: true };
-  return { fecha: new Date(ahora.getTime() + 24 * H), entendida: false };
+  return { fecha: finDelDia(ahora, DIAS_MINIMOS_PARA_PUBLICAR), entendida: false };
 }
 
 interface Ventana {
@@ -210,7 +210,11 @@ export function interpretarTexto(texto: string, ahora: Date = new Date()): Borra
   if (!cant) advertencias.push('No encontré la cantidad. Indícala (por ejemplo "20 kg").');
 
   const caducidad = leerCaducidad(t, ahora);
-  if (!caducidad.entendida) advertencias.push('No indicaste cuándo vence: estimé 24 horas. Corrige la fecha si no es así.');
+  if (!caducidad.entendida) {
+    advertencias.push(`No indicaste cuándo vence: puse dentro de ${DIAS_MINIMOS_PARA_PUBLICAR} días, el mínimo para publicar. Corrige la fecha si no es así.`);
+  } else if (caducidad.fecha.getTime() - ahora.getTime() < DIAS_MINIMOS_PARA_PUBLICAR * 24 * H) {
+    advertencias.push(`Solo se pueden publicar productos que venzan en ${DIAS_MINIMOS_PARA_PUBLICAR} días o más. Cambia la fecha de vencimiento.`);
+  }
 
   const ventana = leerVentana(t, ahora);
   let ventanaHasta: Date;

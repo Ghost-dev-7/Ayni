@@ -22,12 +22,12 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
 
 - **App web (móvil primero, instalable como PWA)** para comercios y comedores:
   - El **comercio** publica un producto por vencer (producto, cantidad, caducidad, ventana de recojo) y sigue su estado.
-  - El comercio también puede **escribirlo con sus palabras** ("20 panes de ayer, recojo hasta las 6pm"): un analizador por reglas, sin IA externa, rellena el formulario y avisa de lo que no entendió. Siempre se revisa antes de publicar.
+  - El comercio también puede **escribirlo con sus palabras** ("20 panes que vencen en 4 días, recojo hasta las 6pm"): un analizador por reglas, sin IA externa, rellena el formulario y avisa de lo que no entendió. Siempre se revisa antes de publicar.
   - **Una sola unidad por producto** en todo el sistema: el azúcar, el arroz, los frejoles, las lentejas, la harina, las papas, los tomates, las verduras y las carnes van por **kg**; la leche fresca y el aceite por **litros**; todo lo demás por **unidades** (panes, latas de atún, paquetes de fideos, bolsas de pan de molde). Así lo donado entra al inventario sin conversiones.
-  - El **comedor** elige en **Ofertas** lo que busca (categorías) y ve las donaciones ordenadas por un **puntaje de 0 a 100**, con el **porqué** de cada una. Las **reserva**.
+  - El **comedor** elige en **Ofertas** lo que busca (categorías), indica si tiene refrigeración y ve las donaciones ordenadas por un **puntaje de 0 a 100**, con el **porqué** de cada una. Las **reserva**.
   - El comedor **confirma la recogida** desde **Notificaciones** (estado del producto y cantidad recibida) y lo recogido **entra solo a su inventario**.
   - **Notificaciones** reúne, y se actualiza sola: lo que hay por recoger, las alertas del inventario (stock bajo, productos por vencer) y el historial de lo reservado, recogido, ingresado y consumido.
-  - **Inventario** del comedor: el stock no se escribe a mano. Sube solo al recoger una donación y baja solo al registrar lo **consumido**, descontando primero lo que vence antes (PEPS). El **mínimo es 10** de la unidad de cada producto y, por debajo, se marca en rojo y avisa.
+  - **Inventario** del comedor: el stock no se escribe a mano. Sube solo al recoger una donación y baja solo al registrar lo **consumido**, descontando primero lo que vence antes (PEPS). El **mínimo es 10** de la unidad de cada producto y, por debajo, se marca en rojo y avisa. Dos botones muestran la lista de **productos bajo 10** y la de **productos en stock**, y cada producto despliega sus lotes.
 - **Web de administración** (escritorio) para el equipo que opera la plataforma:
   - **Panel de monitoreo e impacto** en vivo: kg rescatados, raciones equivalentes, comedores atendidos, % recogido antes de vencer, tiempo medio y alertas.
   - **Registro de eventos** con filtros y el recorrido completo (trazabilidad) de cada donación.
@@ -41,8 +41,9 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
   - *Necesidad:* categoría prioritaria del comedor, o producto que le falta en su inventario.
   - *Capacidad:* espacio que le queda según sus raciones diarias y lo que ya tiene almacenado.
   - Un comedor desactivado o sin refrigeración (si el producto la requiere) no es elegible.
+- **Semáforo de caducidad:** rojo si quedan 3 días o menos, amarillo hasta 5 días, verde si queda más.
 - **Estados** de una donación: `publicada → reservada → recogida` (o `vencida` si pasa la fecha).
-- **Reglas de seguridad alimentaria:** no se publica un producto vencido, no se reserva uno vencido y los productos que requieren frío solo se reservan en comedores con refrigeración.
+- **Reglas de seguridad alimentaria:** solo se publican productos que **vencen en 3 días o más** (los que duran más están bien), no se reserva uno vencido y los productos que requieren frío solo se reservan en comedores con refrigeración.
 - **Trazabilidad:** cada paso queda en un registro de eventos.
 - **Instalable y con modo sin conexión:** la app se puede instalar en el teléfono y, sin internet, abre y muestra lo último que vio. Publicar, reservar y recoger sí necesitan conexión.
 - Todos los datos de la demostración son **sintéticos** (ficticios).
@@ -53,7 +54,7 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
 - **Base de datos:** SQLite (`node:sqlite`, incluido en Node).
 - **App y web de administración:** React, Vite y TypeScript.
 - **Mapa:** Leaflet con teselas de OpenStreetMap (gratuito, sin clave).
-- **Pruebas:** `node:test` (102 pruebas de la API y las reglas del negocio).
+- **Pruebas:** `node:test` (107 pruebas de la API y las reglas del negocio).
 - **Monorepo** con npm workspaces: `apps/api`, `apps/app`, `apps/admin` y `packages/shared` (tipos y esquemas compartidos).
 
 ## Instalación y uso

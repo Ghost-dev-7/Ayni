@@ -22,7 +22,7 @@ describe('flujo publicar → reservar → recoger', () => {
         categoria: 'panaderia',
         cantidad: 20,
         unidad: 'unidades',
-        caducaEn: enHoras(6),
+        caducaEn: enHoras(24 * 4),
         ventanaDesde: enHoras(0),
         ventanaHasta: enHoras(5),
         requiereFrio: false,
@@ -96,8 +96,8 @@ describe('flujo publicar → reservar → recoger', () => {
   });
 
   it('una donación cuya fecha pasó se marca vencida y ya no se puede reservar', async () => {
-    const { id } = await publicar({ caducaEn: enHoras(1), ventanaHasta: enHoras(0.5) });
-    ahora = new Date(ahora.getTime() + 2 * 3_600_000);
+    const { id } = await publicar({ caducaEn: enHoras(24 * 3 + 1), ventanaHasta: enHoras(24 * 3) });
+    ahora = new Date(ahora.getTime() + 4 * 24 * 3_600_000);
     const r = await reservar(id);
     assert.equal(r.statusCode, 409);
     const d = (await app.inject({ url: `/api/donaciones/${id}` })).json();

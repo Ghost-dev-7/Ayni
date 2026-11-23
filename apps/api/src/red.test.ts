@@ -21,7 +21,7 @@ describe('API de emparejamiento e inventario', () => {
       await app.inject({
         method: 'POST',
         url: '/api/donaciones',
-        payload: { comercioId: 1, producto: 'Pan francés', categoria: 'panaderia', cantidad: 20, unidad: 'unidades', caducaEn: enHoras(4), ventanaDesde: enHoras(0), ventanaHasta: enHoras(3), requiereFrio: false, ...extra },
+        payload: { comercioId: 1, producto: 'Pan francés', categoria: 'panaderia', cantidad: 20, unidad: 'unidades', caducaEn: enHoras(24 * 4), ventanaDesde: enHoras(0), ventanaHasta: enHoras(3), requiereFrio: false, ...extra },
       })
     ).json() as { id: number; codigo: string };
 
@@ -138,14 +138,14 @@ describe('API de emparejamiento e inventario', () => {
     const mal = await app.inject({
       method: 'POST',
       url: '/api/donaciones',
-      payload: { comercioId: 1, producto: 'Pan francés', categoria: 'panaderia', cantidad: 20, unidad: 'kg', caducaEn: enHoras(4), ventanaDesde: enHoras(0), ventanaHasta: enHoras(3), requiereFrio: false },
+      payload: { comercioId: 1, producto: 'Pan francés', categoria: 'panaderia', cantidad: 20, unidad: 'kg', caducaEn: enHoras(24 * 4), ventanaDesde: enHoras(0), ventanaHasta: enHoras(3), requiereFrio: false },
     });
     assert.equal(mal.statusCode, 422);
     assert.match(mal.json().error, /se registra por unidades/);
     const fideos = await app.inject({
       method: 'POST',
       url: '/api/donaciones',
-      payload: { comercioId: 1, producto: 'fideos', categoria: 'abarrotes', cantidad: 30, unidad: 'unidades', caducaEn: enHoras(4), ventanaDesde: enHoras(0), ventanaHasta: enHoras(3), requiereFrio: false },
+      payload: { comercioId: 1, producto: 'fideos', categoria: 'abarrotes', cantidad: 30, unidad: 'unidades', caducaEn: enHoras(24 * 4), ventanaDesde: enHoras(0), ventanaHasta: enHoras(3), requiereFrio: false },
     });
     assert.equal(fideos.statusCode, 201);
     assert.equal(fideos.json().producto, 'Fideos'); // se guarda con el nombre del catálogo
@@ -155,7 +155,7 @@ describe('API de emparejamiento e inventario', () => {
     const r = await app.inject({
       method: 'POST',
       url: '/api/donaciones',
-      payload: { comercioId: 1, producto: 'Yogures', categoria: 'lacteos', cantidad: 40, unidad: 'unidades', caducaEn: enHoras(10), ventanaDesde: enHoras(0), ventanaHasta: enHoras(8), requiereFrio: false },
+      payload: { comercioId: 1, producto: 'Yogures', categoria: 'lacteos', cantidad: 40, unidad: 'unidades', caducaEn: enHoras(24 * 4), ventanaDesde: enHoras(0), ventanaHasta: enHoras(8), requiereFrio: false },
     });
     assert.equal(r.statusCode, 201);
     assert.equal(r.json().requiereFrio, true);

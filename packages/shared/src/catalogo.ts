@@ -1,5 +1,8 @@
 import type { Categoria, Unidad } from './index.ts';
 
+/** Un comercio solo puede publicar productos que venzan en este número de días o más. */
+export const DIAS_MINIMOS_PARA_PUBLICAR = 3;
+
 /** Stock mínimo de cualquier producto, en su propia unidad. Por debajo de esto el inventario marca una alerta. */
 export const STOCK_MINIMO = 10;
 

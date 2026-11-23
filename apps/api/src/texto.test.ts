@@ -10,13 +10,20 @@ const hora = (iso: string) => {
 };
 
 describe('interpretarTexto', () => {
-  it('entiende el ejemplo "20 panes de ayer, recojo hasta las 6pm"', () => {
+  it('avisa que un producto que vence en menos de 3 días no se puede publicar', () => {
     const b = interpretarTexto('20 panes de ayer, recojo hasta las 6pm', AHORA);
+    assert.equal(b.producto, 'Pan francés');
+    assert.equal(hora(b.caducaEn), '23/11 23:59'); // pan de ayer: vence hoy
+    assert.ok(b.advertencias.some((a) => a.includes('3 días o más')));
+  });
+
+  it('entiende el ejemplo "20 panes que vencen en 4 días, recojo hasta las 6pm"', () => {
+    const b = interpretarTexto('20 panes que vencen en 4 días, recojo hasta las 6pm', AHORA);
     assert.equal(b.producto, 'Pan francés');
     assert.equal(b.categoria, 'panaderia');
     assert.equal(b.cantidad, 20);
     assert.equal(b.unidad, 'unidades');
-    assert.equal(hora(b.caducaEn), '23/11 23:59'); // pan de ayer: vence hoy
+    assert.equal(hora(b.caducaEn), '27/11 23:59');
     assert.equal(hora(b.ventanaHasta), '23/11 18:00');
     assert.equal(b.requiereFrio, false);
     assert.deepEqual(b.advertencias, []);
@@ -114,6 +121,13 @@ describe('interpretarTexto', () => {
     assert.match(b.producto, /Quinua/i);
     assert.equal(b.cantidad, 15);
     assert.ok(b.advertencias.some((a) => a.includes('No reconocí')));
+  });
+
+  it('si no dice cuándo vence, pone 3 días (el mínimo para publicar) y lo avisa', () => {
+    const b = interpretarTexto('20 panes, recojo hasta las 6pm', AHORA);
+    assert.equal(hora(b.caducaEn), '26/11 23:59');
+    assert.equal(b.entendido.caducidad, false);
+    assert.ok(b.advertencias.some((a) => a.includes('dentro de 3 días')));
   });
 
   it('una caducidad siempre queda en el futuro', () => {

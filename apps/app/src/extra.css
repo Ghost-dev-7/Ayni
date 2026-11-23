@@ -12,6 +12,16 @@ button.btn:disabled { opacity: .55; cursor: not-allowed; }
 .checks input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--g700); }
 .codigo { font-family: var(--serif); font-size: 40px; letter-spacing: .2em; font-weight: 700; color: var(--g900); }
 select.input { appearance: auto; }
+/* Botón rojo grande, de ancho completo, para la acción principal del inventario. */
+.btn.red { background: var(--red); color: #fff; }
+.btn.red:hover { background: #a63525; }
+.btn.grande { min-height: 58px; font-size: 18px; font-weight: 700; }
+/* Tarjetas de resumen que funcionan como botones. */
+.stat-btn { text-align: left; background: var(--paper); border: 2px solid var(--line); border-radius: 14px; padding: 12px; cursor: pointer; display: block; width: 100%; }
+.stat-btn b { display: block; font-family: var(--serif); font-size: 26px; }
+.stat-btn span { font-size: 13px; color: var(--muted); }
+.stat-btn:hover { border-color: var(--g500); }
+.stat-btn.on { border-color: var(--g700); background: var(--g050); box-shadow: var(--shadow); }
 .sin-conexion { background: var(--yellow-100); color: #5c4500; font-size: 12px; font-weight: 600; text-align: center; padding: 6px 12px; }
 .seg button { flex: 1; text-align: center; padding: 10px 6px; border: 0; border-radius: 999px; background: transparent; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; }
 .seg button.on { background: var(--paper); color: var(--g900); box-shadow: var(--shadow); }
