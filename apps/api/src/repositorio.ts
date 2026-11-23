@@ -277,6 +277,48 @@ export function recogerDonacion(db: BD, id: number, d: RecogerInput, ahora: Date
   return obtenerDonacion(db, id)!;
 }
 
-export function listarEventos(db: BD, limite = 100): EventoRegistro[] {
-  return (db.prepare('SELECT * FROM eventos ORDER BY fecha DESC, id DESC LIMIT ?').all(limite) as Fila[]).map(eventoDe);
+export interface FiltroEventos {
+  limite?: number;
+  rol?: string;
+  accion?: string;
+  entidad?: string;
+  /** Texto a buscar en actor, entidad o detalle. */
+  texto?: string;
+}
+
+export function listarEventos(db: BD, filtro: FiltroEventos = {}): EventoRegistro[] {
+  const condiciones: string[] = [];
+  const valores: (string | number)[] = [];
+  if (filtro.rol) { condiciones.push('rol = ?'); valores.push(filtro.rol); }
+  if (filtro.accion) { condiciones.push('accion = ?'); valores.push(filtro.accion); }
+  if (filtro.entidad) { condiciones.push('entidad = ?'); valores.push(filtro.entidad); }
+  if (filtro.texto) {
+    condiciones.push('(actor LIKE ? OR entidad LIKE ? OR detalle LIKE ?)');
+    const patron = `%${filtro.texto}%`;
+    valores.push(patron, patron, patron);
+  }
+  const donde = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
+  const sql = `SELECT * FROM eventos ${donde} ORDER BY fecha DESC, id DESC LIMIT ?`;
+  return (db.prepare(sql).all(...valores, filtro.limite ?? 100) as Fila[]).map(eventoDe);
+}
+
+/** Acciones distintas que existen en el registro (para el filtro de la web de administración). */
+export function listarAccionesEventos(db: BD): string[] {
+  return (db.prepare('SELECT DISTINCT accion FROM eventos ORDER BY accion').all() as { accion: string }[]).map((f) => f.accion);
+}
+
+/** Activa o desactiva un comedor o un comercio y deja constancia en el registro de eventos. */
+export function cambiarActivo(db: BD, tabla: 'comedores' | 'comercios', id: number, activo: boolean, ahora: Date = new Date()): Comedor | Comercio {
+  const actual = tabla === 'comedores' ? obtenerComedor(db, id) : obtenerComercio(db, id);
+  if (!actual) throw new ErrorDeNegocio('No existe.', 404);
+  db.prepare(`UPDATE ${tabla} SET activo = ? WHERE id = ?`).run(activo ? 1 : 0, id);
+  registrarEvento(db, {
+    rol: 'admin',
+    actor: 'Administración',
+    accion: activo ? 'Activación' : 'Desactivación',
+    entidad: `${tabla === 'comedores' ? 'KIT' : 'COM'}-${String(id).padStart(4, '0')}`,
+    detalle: actual.nombre,
+    fecha: ahora.toISOString(),
+  });
+  return (tabla === 'comedores' ? obtenerComedor(db, id) : obtenerComercio(db, id))!;
 }

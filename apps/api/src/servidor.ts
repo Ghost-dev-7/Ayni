@@ -1,5 +1,6 @@
 import cors from '@fastify/cors';
 import {
+  activoInputSchema,
   comedorInputSchema,
   comercioInputSchema,
   donacionInputSchema,
@@ -11,10 +12,14 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { abrirBD, type BD } from './bd.ts';
 import { nivelCaducidad, puedePublicar } from './caducidad.ts';
+import { calcularImpacto } from './impacto.ts';
 import {
+  cambiarActivo,
   crearComedor,
   crearComercio,
   crearDonacion,
+  listarAccionesEventos,
+  obtenerComercio,
   listarComedores,
   listarComercios,
   listarDonaciones,
@@ -86,6 +91,9 @@ export function construirApi(db: BD, reloj: () => Date = () => new Date()): Fast
   app.post('/api/donaciones', async (req, reply) => {
     const datos = donacionInputSchema.parse(req.body);
     const ahora = reloj();
+    const comercio = obtenerComercio(db, datos.comercioId);
+    if (!comercio) return reply.status(404).send({ error: 'El comercio no existe.' });
+    if (!comercio.activo) return reply.status(422).send({ error: 'El comercio está desactivado y no puede publicar.' });
     // Regla de seguridad alimentaria: no se publica un producto vencido.
     if (!puedePublicar(datos.caducaEn, ahora)) {
       return reply.status(422).send({ error: 'No se puede publicar un producto ya vencido.' });
@@ -94,9 +102,27 @@ export function construirApi(db: BD, reloj: () => Date = () => new Date()): Fast
   });
 
   app.get('/api/eventos', async (req) => {
-    const { limite } = req.query as { limite?: string };
-    const n = Math.min(Math.max(Number(limite) || 100, 1), 500);
-    return listarEventos(db, n);
+    const q = req.query as { limite?: string; rol?: string; accion?: string; entidad?: string; texto?: string };
+    const limite = Math.min(Math.max(Number(q.limite) || 100, 1), 500);
+    return listarEventos(db, { limite, rol: q.rol, accion: q.accion, entidad: q.entidad, texto: q.texto });
+  });
+
+  app.get('/api/eventos/acciones', async () => listarAccionesEventos(db));
+
+  app.get('/api/impacto', async () => {
+    const ahora = reloj();
+    marcarVencidas(db, ahora);
+    return calcularImpacto(db, ahora);
+  });
+
+  app.patch('/api/comedores/:id', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    return cambiarActivo(db, 'comedores', id, activoInputSchema.parse(req.body).activo, reloj());
+  });
+
+  app.patch('/api/comercios/:id', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    return cambiarActivo(db, 'comercios', id, activoInputSchema.parse(req.body).activo, reloj());
   });
 
   return app;

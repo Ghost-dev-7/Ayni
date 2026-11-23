@@ -18,6 +18,10 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
   - El **comercio** publica un producto por vencer (producto, cantidad, caducidad, ventana de recojo) y sigue su estado.
   - El **comedor** ve las donaciones disponibles ordenadas por urgencia, con distancia y semáforo de caducidad, y las **reserva**.
   - El comedor **confirma la recogida** (estado del producto y cantidad recibida).
+- **Web de administración** (escritorio) para el equipo que opera la plataforma:
+  - **Panel de monitoreo e impacto** en vivo: kg rescatados, raciones equivalentes, comedores atendidos, % recogido antes de vencer, tiempo medio y alertas.
+  - **Registro de eventos** con filtros y el recorrido completo (trazabilidad) de cada donación.
+  - **Donaciones** por estado, y alta, activación y desactivación de **comedores** y **comercios**, de modo que la red crece sin tocar código.
 - **Estados** de una donación: `publicada → reservada → recogida` (o `vencida` si pasa la fecha).
 - **Reglas de seguridad alimentaria:** no se publica un producto vencido, no se reserva uno vencido y los productos que requieren frío solo se reservan en comedores con refrigeración.
 - **Trazabilidad:** cada paso queda en un registro de eventos.
@@ -27,9 +31,9 @@ Proyecto desarrollado durante el hackatón **HackODS UA 2026** (23 de noviembre 
 
 - **API:** Node.js, TypeScript y Fastify, con validación Zod.
 - **Base de datos:** SQLite (`node:sqlite`, incluido en Node).
-- **App:** React, Vite y TypeScript.
-- **Pruebas:** `node:test` (24 pruebas de la API y las reglas del negocio).
-- **Monorepo** con npm workspaces: `apps/api`, `apps/app` y `packages/shared` (tipos y esquemas compartidos).
+- **App y web de administración:** React, Vite y TypeScript.
+- **Pruebas:** `node:test` (más de 35 pruebas de la API y las reglas del negocio).
+- **Monorepo** con npm workspaces: `apps/api`, `apps/app`, `apps/admin` y `packages/shared` (tipos y esquemas compartidos).
 
 ## Instalación y uso
 
@@ -40,9 +44,10 @@ npm install
 npm run seed     # carga los datos sintéticos (opcional: la API los carga sola si la base está vacía)
 npm run api      # API en http://127.0.0.1:3001
 npm run app      # app en http://localhost:5173 (en otra terminal)
+npm run admin    # web de administración en http://localhost:5174 (en otra terminal)
 ```
 
-Abre `http://localhost:5173`, elige si entras como comercio o como comedor y prueba el flujo: publicar, reservar y recoger.
+Abre `http://localhost:5173`, elige si entras como comercio o como comedor y prueba el flujo: publicar, reservar y recoger. Abre `http://localhost:5174` para ver el panel, el registro de eventos y gestionar comedores y comercios.
 
 Pruebas y verificación de tipos:
 
@@ -58,10 +63,11 @@ npm run typecheck
 ```
 apps/api        API REST (Fastify) y base de datos
 apps/app        App web de comercios y comedores
+apps/admin      Web de administración (monitoreo, trazabilidad y gestión de la red)
 packages/shared Tipos y esquemas de validación compartidos
 data/synthetic  Datos ficticios de demostración
 ```
 
 ## Estado
 
-En desarrollo durante el evento. Próximamente: web de administración, emparejamiento por puntaje explicable, inventario de comedores y panel de impacto.
+En desarrollo durante el evento. Próximamente: emparejamiento por puntaje explicable, inventario de comedores y mapa de la red.

@@ -142,6 +142,61 @@ export interface Donacion {
   cantidadRecibida: number | null;
 }
 
+/** Cuántos kg equivalen a una ración. Supuesto de demostración, ajustable. */
+export const KG_POR_RACION = 0.5;
+
+/** Activa o desactiva un comedor o un comercio. */
+export const activoInputSchema = z.object({ activo: z.boolean() });
+
+export interface ImpactoComedor {
+  comedorId: number;
+  nombre: string;
+  zona: string;
+  activo: boolean;
+  kgRecibidos: number;
+  donacionesRecogidas: number;
+  diasSinActividad: number | null;
+}
+
+export interface ImpactoComercio {
+  comercioId: number;
+  nombre: string;
+  tipo: TipoComercio;
+  activo: boolean;
+  kgDonados: number;
+  donacionesRecogidas: number;
+  vencidasSinDonar: number;
+  donacionesTotales: number;
+}
+
+/** Cifras del panel de impacto y monitoreo (últimos 28 días). Todas calculadas con datos sintéticos en la demostración. */
+export interface Impacto {
+  generadoEn: string;
+  ventanaDias: number;
+  kgRescatados: number;
+  racionesEquivalentes: number;
+  kgPorRacion: number;
+  comedoresAtendidos: number;
+  comerciosDonantes: number;
+  comerciosActivos: number;
+  comedoresActivos: number;
+  donacionesPublicadas: number;
+  /** % de donaciones cerradas que se recogieron antes de vencer; null si todavía no hay ninguna cerrada. */
+  porcentajeAntesDeVencer: number | null;
+  /** Minutos promedio entre publicar y recoger; null si no hay recogidas. */
+  tiempoMedioMin: number | null;
+  /** Kg recogidos por semana, de la más antigua a la más reciente (4 semanas). */
+  kgPorSemana: number[];
+  porEstado: Record<EstadoDonacion, number>;
+  alertas: {
+    vencenPronto: number;
+    vencenProntoSinComedor: number;
+    comedoresSinActividad: { comedorId: number; nombre: string; dias: number | null }[];
+  };
+  comedores: ImpactoComedor[];
+  comercios: ImpactoComercio[];
+}
+
 export interface EventoRegistro {
   id: number;
   fecha: string;

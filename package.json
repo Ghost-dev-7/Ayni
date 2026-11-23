@@ -11,10 +11,12 @@
   "scripts": {
     "api": "npm run dev -w @ayni/api",
     "app": "npm run dev -w @ayni/app",
+    "admin": "npm run dev -w @ayni/admin",
     "build:app": "npm run build -w @ayni/app",
+    "build:admin": "npm run build -w @ayni/admin",
     "seed": "npm run seed -w @ayni/api",
     "test": "npm run test -w @ayni/api",
-    "typecheck": "tsc --noEmit -p apps/api && tsc --noEmit -p apps/app && tsc --noEmit -p packages/shared"
+    "typecheck": "tsc --noEmit -p apps/api && tsc --noEmit -p apps/app && tsc --noEmit -p apps/admin && tsc --noEmit -p packages/shared"
   },
   "engines": {
     "node": ">=24"

@@ -1,0 +1,16 @@
+/* Estilos propios de la web de administración. */
+select.input { appearance: auto; }
+.seg button { flex: 1; text-align: center; padding: 9px 10px; border: 0; border-radius: 999px; background: transparent; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.seg button.on { background: var(--paper); color: var(--g900); box-shadow: var(--shadow); }
+.table-wrap { overflow-x: auto; }
+.table th, .table td { white-space: nowrap; }
+.table td.wrap { white-space: normal; min-width: 220px; }
+.table tr.fila-click { cursor: pointer; }
+.filters .btn { align-self: center; }
+.bars span { color: var(--ink); font-weight: 700; font-size: 12px; }
+button.btn:disabled { opacity: .55; cursor: not-allowed; }
+a.btn { text-decoration: none; }
+fieldset { min-width: 0; }
+.grid-eventos { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(260px, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1180px) { .grid-eventos { grid-template-columns: minmax(0, 1fr); } .grid-eventos aside { order: -1; } }
+@media (min-width: 1181px) { .grid-eventos aside { position: sticky; top: 84px; } }
