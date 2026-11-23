@@ -8,6 +8,8 @@ const MENU = [
   { grupo: 'Red' },
   { ruta: '/comedores', etiqueta: 'Comedores', icono: '🍽️' },
   { ruta: '/comercios', etiqueta: 'Comercios', icono: '🏪' },
+  { grupo: 'Operación' },
+  { ruta: '/inventario', etiqueta: 'Inventario central', icono: '▦' },
 ] as const;
 
 /** Estructura de la web de administración: menú lateral, barra superior y contenido. */

@@ -2,6 +2,7 @@ import type {
   Categoria,
   Comedor,
   ComedorInput,
+  ComedorPerfil,
   Comercio,
   ComercioInput,
   Donacion,
@@ -15,6 +16,8 @@ import type {
 } from '@ayni/shared';
 import type { BD } from './bd.ts';
 import { ErrorDeNegocio, exigirTransicion, generarCodigoEntrega } from './estados.ts';
+import { registrarEvento } from './eventos.ts';
+import { registrarEntrada } from './inventario.ts';
 
 type Fila = Record<string, unknown>;
 
@@ -85,26 +88,7 @@ function eventoDe(f: Fila): EventoRegistro {
   };
 }
 
-export interface NuevoEvento {
-  rol: EventoRegistro['rol'];
-  actor: string;
-  accion: string;
-  entidad: string;
-  detalle?: string;
-  fecha?: string;
-}
-
-/** Registra un evento de trazabilidad. */
-export function registrarEvento(db: BD, e: NuevoEvento): void {
-  db.prepare('INSERT INTO eventos (fecha, rol, actor, accion, entidad, detalle) VALUES (?, ?, ?, ?, ?, ?)').run(
-    e.fecha ?? new Date().toISOString(),
-    e.rol,
-    e.actor,
-    e.accion,
-    e.entidad,
-    e.detalle ?? '',
-  );
-}
+export { registrarEvento };
 
 export function listarComercios(db: BD): Comercio[] {
   return (db.prepare('SELECT * FROM comercios ORDER BY id').all() as Fila[]).map(comercioDe);
@@ -274,7 +258,51 @@ export function recogerDonacion(db: BD, id: number, d: RecogerInput, ahora: Date
     detalle: `${donacion.producto} · ${d.cantidadRecibida} ${donacion.unidad} recibidos · por ${d.recogidoPor}`,
     fecha: ahora.toISOString(),
   });
+  // Lo recogido entra automáticamente al inventario del comedor.
+  registrarEntrada(
+    db,
+    comedor.id,
+    { producto: donacion.producto, categoria: donacion.categoria, unidad: donacion.unidad, cantidad: d.cantidadRecibida, caducaEn: donacion.caducaEn },
+    { origen: 'donacion', donacionId: id, motivo: `Donación ${donacion.codigo}`, actor: comedor.nombre, ahora },
+  );
   return obtenerDonacion(db, id)!;
+}
+
+/** Actualiza lo que el comedor declara: necesidades, raciones, refrigeración y horario. */
+export function actualizarPerfilComedor(db: BD, id: number, p: ComedorPerfil, ahora: Date = new Date()): Comedor {
+  const comedor = obtenerComedor(db, id);
+  if (!comedor) throw new ErrorDeNegocio('El comedor no existe.', 404);
+  db.prepare('UPDATE comedores SET necesidades = ?, raciones_dia = ?, refrigeracion = ?, horario_recojo = ? WHERE id = ?').run(
+    JSON.stringify(p.necesidades),
+    p.racionesDia,
+    p.refrigeracion ? 1 : 0,
+    p.horarioRecojo,
+    id,
+  );
+  registrarEvento(db, {
+    rol: 'comedor',
+    actor: comedor.nombre,
+    accion: 'Perfil actualizado',
+    entidad: `KIT-${String(id).padStart(4, '0')}`,
+    detalle: `${p.racionesDia} raciones/día · ${p.necesidades.length} categorías prioritarias`,
+    fecha: ahora.toISOString(),
+  });
+  return obtenerComedor(db, id)!;
+}
+
+/** Un administrador asigna una donación publicada a un comedor concreto (reasignación manual). */
+export function reasignarDonacion(db: BD, id: number, comedorId: number, ahora: Date = new Date()): Donacion {
+  const d = reservarDonacion(db, id, { comedorId, reservadoPor: 'Administración' }, ahora);
+  const comedor = obtenerComedor(db, comedorId)!;
+  registrarEvento(db, {
+    rol: 'admin',
+    actor: 'Administración',
+    accion: 'Reasignada',
+    entidad: d.codigo,
+    detalle: `Asignada a ${comedor.nombre}`,
+    fecha: ahora.toISOString(),
+  });
+  return d;
 }
 
 export interface FiltroEventos {

@@ -1,4 +1,4 @@
-import type { Comedor, ComedorInput, Comercio, ComercioInput, Donacion, EventoRegistro, Impacto } from '@ayni/shared';
+import type { Comedor, ComedorInput, Comercio, ComercioInput, Donacion, EventoRegistro, Impacto, InventarioCentral, Sugerencia } from '@ayni/shared';
 
 export type NivelCaducidad = 'vencido' | 'rojo' | 'amarillo' | 'verde';
 export type DonacionN = Donacion & { nivelCaducidad: NivelCaducidad };
@@ -45,6 +45,9 @@ export const api = {
   donaciones: () => pedir<DonacionN[]>('/donaciones'),
   eventos: (f: FiltroEventos = {}) => pedir<EventoRegistro[]>(`/eventos${consulta(f)}`),
   acciones: () => pedir<string[]>('/eventos/acciones'),
+  inventario: () => pedir<InventarioCentral>('/inventario'),
+  sugerencias: (donacionId: number) => pedir<Sugerencia[]>(`/donaciones/${donacionId}/sugerencias`),
+  reasignar: (donacionId: number, comedorId: number) => pedir<Donacion>(`/donaciones/${donacionId}/reasignar`, { metodo: 'POST', cuerpo: { comedorId } }),
   crearComedor: (d: ComedorInput) => pedir<Comedor>('/comedores', { metodo: 'POST', cuerpo: d }),
   crearComercio: (d: ComercioInput) => pedir<Comercio>('/comercios', { metodo: 'POST', cuerpo: d }),
   activarComedor: (id: number, activo: boolean) => pedir<Comedor>(`/comedores/${id}`, { metodo: 'PATCH', cuerpo: { activo } }),

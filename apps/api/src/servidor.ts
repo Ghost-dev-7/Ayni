@@ -2,6 +2,11 @@ import cors from '@fastify/cors';
 import {
   activoInputSchema,
   comedorInputSchema,
+  comedorPerfilSchema,
+  entradaInventarioSchema,
+  minimoInventarioSchema,
+  reasignarInputSchema,
+  salidaInventarioSchema,
   comercioInputSchema,
   donacionInputSchema,
   estadoDonacionSchema,
@@ -12,8 +17,14 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
 import { abrirBD, type BD } from './bd.ts';
 import { nivelCaducidad, puedePublicar } from './caducidad.ts';
+import { ofertasParaComedor, sugerirComedores } from './emparejamiento.ts';
+import { registrarEvento } from './eventos.ts';
 import { calcularImpacto } from './impacto.ts';
+import { fijarMinimo, inventarioCentral, obtenerInventario, registrarEntrada, registrarSalida } from './inventario.ts';
 import {
+  actualizarPerfilComedor,
+  obtenerComedor,
+  reasignarDonacion,
   cambiarActivo,
   crearComedor,
   crearComercio,
@@ -98,8 +109,79 @@ export function construirApi(db: BD, reloj: () => Date = () => new Date()): Fast
     if (!puedePublicar(datos.caducaEn, ahora)) {
       return reply.status(422).send({ error: 'No se puede publicar un producto ya vencido.' });
     }
-    return reply.status(201).send(crearDonacion(db, datos, ahora));
+    const creada = crearDonacion(db, datos, ahora);
+    // El sistema puntúa a los comedores y deja constancia de a quién sugiere primero.
+    const mejor = sugerirComedores(db, creada, ahora).find((s) => s.elegible);
+    registrarEvento(db, {
+      rol: 'sistema',
+      actor: 'Emparejamiento',
+      accion: 'Emparejamiento calculado',
+      entidad: creada.codigo,
+      detalle: mejor ? `Sugerido: ${mejor.nombre} (${mejor.puntaje}/100)` : 'Ningún comedor elegible por ahora',
+      fecha: ahora.toISOString(),
+    });
+    return reply.status(201).send(creada);
   });
+
+  app.get('/api/donaciones/:id/sugerencias', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    const ahora = reloj();
+    marcarVencidas(db, ahora);
+    const d = obtenerDonacion(db, id);
+    if (!d) return reply.status(404).send({ error: 'La donación no existe.' });
+    return sugerirComedores(db, d, ahora);
+  });
+
+  app.post('/api/donaciones/:id/reasignar', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    return reasignarDonacion(db, id, reasignarInputSchema.parse(req.body).comedorId, reloj());
+  });
+
+  app.get('/api/comedores/:id/ofertas', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    const ahora = reloj();
+    marcarVencidas(db, ahora);
+    const comedor = obtenerComedor(db, id);
+    if (!comedor) return reply.status(404).send({ error: 'El comedor no existe.' });
+    return ofertasParaComedor(db, comedor, listarDonaciones(db, 'publicada'), ahora).map((o) => ({
+      donacion: { ...o.donacion, nivelCaducidad: nivelCaducidad(o.donacion.caducaEn, ahora) },
+      comercio: o.comercio,
+      sugerencia: o.sugerencia,
+    }));
+  });
+
+  app.put('/api/comedores/:id/perfil', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    return actualizarPerfilComedor(db, id, comedorPerfilSchema.parse(req.body), reloj());
+  });
+
+  app.get('/api/comedores/:id/inventario', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    return obtenerInventario(db, id, reloj());
+  });
+
+  app.post('/api/comedores/:id/inventario/entradas', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    const datos = entradaInventarioSchema.parse(req.body);
+    const ahora = reloj();
+    if (datos.caducaEn && !puedePublicar(datos.caducaEn, ahora)) {
+      return reply.status(422).send({ error: 'No se puede registrar un producto que ya venció.' });
+    }
+    return reply.status(201).send(registrarEntrada(db, id, datos, { origen: 'manual', ahora }));
+  });
+
+  app.post('/api/comedores/:id/inventario/salidas', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    return registrarSalida(db, id, salidaInventarioSchema.parse(req.body), reloj());
+  });
+
+  app.put('/api/comedores/:id/inventario/minimos', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    fijarMinimo(db, id, minimoInventarioSchema.parse(req.body));
+    return obtenerInventario(db, id, reloj());
+  });
+
+  app.get('/api/inventario', async () => inventarioCentral(db, reloj()));
 
   app.get('/api/eventos', async (req) => {
     const q = req.query as { limite?: string; rol?: string; accion?: string; entidad?: string; texto?: string };

@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Categoria, Comedor, Comercio, EstadoDonacion, TipoComercio, Unidad } from '@ayni/shared';
 import { abrirBD, vaciarBD, type BD } from './bd.ts';
+import { fijarMinimo, registrarEntrada } from './inventario.ts';
 import { codigoDonacion, registrarEvento } from './repositorio.ts';
 
 const DIR_DATOS = resolve(import.meta.dirname, '../../../data/synthetic');
@@ -147,6 +148,28 @@ export function sembrar(db: BD, ahora: Date = new Date()): ResumenSemilla {
       estado: i < 7 ? 'publicada' : 'reservada',
     });
   });
+
+  // Inventario inicial de cada comedor: 6 productos con lotes de distinta caducidad y un mínimo.
+  const DIAS_SECOS: Categoria[] = ['abarrotes', 'menestras', 'conservas'];
+  for (const k of comedores) {
+    const candidatos = productos.filter((p) => !p.frio || k.refrigeracion);
+    const elegidos = new Set<ProductoBase>();
+    while (elegidos.size < 6) elegidos.add(azar.elegir(candidatos));
+    for (const p of elegidos) {
+      const secos = DIAS_SECOS.includes(p.categoria);
+      const horas = secos ? azar.entero(90, 300) * 24 : p.categoria === 'panaderia' ? azar.entero(6, 40) : azar.entero(24, 8 * 24);
+      const cantidad = p.unidad === 'unidades' ? azar.entero(20, 120) : azar.entero(4, 70);
+      registrarEntrada(
+        db,
+        k.id,
+        { producto: p.nombre, categoria: p.categoria, unidad: p.unidad, cantidad, caducaEn: iso(t0 + horas * H) },
+        { origen: 'manual', motivo: 'Inventario inicial', actor: k.nombre, ahora: new Date(t0 - azar.entero(1, 5) * DIA), sinEvento: true },
+      );
+      // Un tercio de los productos queda por debajo de su mínimo, para mostrar las alertas.
+      const minimo = Math.max(1, Math.round(cantidad * (azar.siguiente() < 0.35 ? 1.6 : 0.5)));
+      fijarMinimo(db, k.id, { producto: p.nombre, unidad: p.unidad, minimo });
+    }
+  }
 
   return { comercios: comercios.length, comedores: comedores.length, donaciones: id, eventos };
 }

@@ -1,25 +1,30 @@
-import type { Comedor, Comercio } from '@ayni/shared';
+import type { Comedor, Comercio, Sugerencia } from '@ayni/shared';
 import { useState, type FormEvent } from 'react';
 import { api, type DonacionN } from '../api.ts';
-import { Cabecera, Chip, Estado, Marco, type Pestana } from '../componentes.tsx';
+import { Cabecera, Chip, Estado, Marco } from '../componentes.tsx';
 import { ICONO, NOMBRE_CATEGORIA, cantidadTexto, claseSemaforo, distanciaKm, fechaHora, hora, km, textoVence } from '../formato.ts';
 import { ir, useCarga, type Sesion } from '../sesion.ts';
+import { PESTANAS_COMEDOR as PESTANAS } from './pestanas.ts';
 
-const PESTANAS: Pestana[] = [
-  { etiqueta: 'Ofertas', icono: '◎', ruta: '/comedor' },
-  { etiqueta: 'Reservas', icono: '✓', ruta: '/comedor/reservas' },
-  { etiqueta: 'Salir', icono: '⇄', ruta: '/' },
+const COMPONENTES: { clave: keyof Sugerencia['componentes']; etiqueta: string }[] = [
+  { clave: 'urgencia', etiqueta: 'Urgencia' },
+  { clave: 'cercania', etiqueta: 'Cercanía' },
+  { clave: 'necesidad', etiqueta: 'Necesidad' },
+  { clave: 'capacidad', etiqueta: 'Capacidad' },
 ];
 
-function useDatosComedor(sesion: Sesion, id?: number) {
-  const comedores = useCarga(api.comedores);
-  const comercios = useCarga(api.comercios);
-  const donaciones = useCarga(() => api.donaciones(), [id]);
-  return { comedores, comercios, donaciones, comedor: comedores.datos?.find((c) => c.id === sesion.id) };
+function Puntaje({ valor, elegible }: { valor: number; elegible: boolean }) {
+  return (
+    <div className="score" style={{ ['--p' as string]: elegible ? valor : 0 }} aria-label={elegible ? `Puntaje ${valor} de 100` : 'No disponible para tu comedor'}>
+      <span>{elegible ? valor : '—'}</span>
+    </div>
+  );
 }
 
 export function ComedorOfertas({ sesion }: { sesion: Sesion }) {
-  const { comedor, comercios, donaciones } = useDatosComedor(sesion);
+  const comedores = useCarga(api.comedores);
+  const ofertas = useCarga(() => api.ofertas(sesion.id), [sesion.id]);
+  const comedor = comedores.datos?.find((c) => c.id === sesion.id);
   const ahora = new Date();
 
   return (
@@ -34,36 +39,31 @@ export function ComedorOfertas({ sesion }: { sesion: Sesion }) {
         </div>
       </div>
 
-      <div className="section-title"><h2>Disponibles, lo más urgente primero</h2></div>
-      <Estado carga={donaciones}>
-        {(todas) => {
-          const publicadas = todas.filter((d) => d.estado === 'publicada').sort((a, b) => a.caducaEn.localeCompare(b.caducaEn));
-          if (publicadas.length === 0) return <p className="muted">No hay donaciones disponibles por ahora.</p>;
+      <div className="section-title"><h2>Ofertas para ti</h2></div>
+      <p className="small muted" style={{ marginTop: -4, marginBottom: 10 }}>Ordenadas por puntaje: urgencia, cercanía, necesidad y capacidad de tu comedor.</p>
+      <Estado carga={ofertas}>
+        {(lista) => {
+          if (lista.length === 0) return <p className="muted">No hay donaciones disponibles por ahora.</p>;
           return (
             <div className="stack">
-              {publicadas.map((d) => {
-                const comercio = comercios.datos?.find((c) => c.id === d.comercioId);
-                const incompatible = d.requiereFrio && comedor && !comedor.refrigeracion;
-                return (
-                  <a key={d.id} href={`#/comedor/donacion/${d.id}`} className="card" style={{ display: 'block', opacity: incompatible ? 0.6 : 1 }}>
-                    <div className="row">
-                      <div className="thumb" aria-hidden="true">{ICONO[d.categoria]}</div>
-                      <div className="grow">
-                        <b>{d.producto} · {cantidadTexto(d.cantidad, d.unidad)}</b>
-                        <div className="small muted">
-                          {comercio?.nombre ?? 'Comercio'}{comercio && comedor ? ` · ${km(distanciaKm(comedor, comercio))}` : ''}
-                        </div>
-                      </div>
+              {lista.map(({ donacion: d, comercio, sugerencia: s }) => (
+                <a key={d.id} href={`#/comedor/donacion/${d.id}`} className="card" style={{ display: 'block', opacity: s.elegible ? 1 : 0.6 }}>
+                  <div className="row">
+                    <div className="thumb" aria-hidden="true">{ICONO[d.categoria]}</div>
+                    <div className="grow">
+                      <b>{d.producto} · {cantidadTexto(d.cantidad, d.unidad)}</b>
+                      <div className="small muted">{comercio.nombre} · {km(s.distanciaKm)}</div>
                     </div>
-                    <div className="row" style={{ marginTop: 10, flexWrap: 'wrap' }}>
-                      <span className={`sem ${claseSemaforo(d.nivelCaducidad)}`}>{textoVence(d.caducaEn, ahora)}</span>
-                      {comedor?.necesidades.includes(d.categoria) && <Chip tono="green">Necesidad prioritaria</Chip>}
-                      {d.requiereFrio && <Chip tono={incompatible ? 'red' : 'blue'}>{incompatible ? 'Requiere frío (no disponible)' : 'Requiere frío'}</Chip>}
-                      <Chip tono="gray">Recojo hasta {hora(d.ventanaHasta)}</Chip>
-                    </div>
-                  </a>
-                );
-              })}
+                    <Puntaje valor={s.puntaje} elegible={s.elegible} />
+                  </div>
+                  <div className="row" style={{ marginTop: 10, flexWrap: 'wrap' }}>
+                    <span className={`sem ${claseSemaforo(d.nivelCaducidad)}`}>{textoVence(d.caducaEn, ahora)}</span>
+                    {s.componentes.necesidad >= 70 && <Chip tono="green">{s.componentes.necesidad === 100 ? 'Necesidad prioritaria' : 'Te falta en inventario'}</Chip>}
+                    {d.requiereFrio && <Chip tono={s.elegible ? 'blue' : 'red'}>{s.elegible ? 'Requiere frío' : 'Requiere frío (no disponible)'}</Chip>}
+                    <Chip tono="gray">Recojo hasta {hora(d.ventanaHasta)}</Chip>
+                  </div>
+                </a>
+              ))}
             </div>
           );
         }}
@@ -73,8 +73,11 @@ export function ComedorOfertas({ sesion }: { sesion: Sesion }) {
 }
 
 export function ComedorDonacion({ sesion, id }: { sesion: Sesion; id: number }) {
-  const { comedor, comercios } = useDatosComedor(sesion, id);
+  const comedores = useCarga(api.comedores);
+  const comercios = useCarga(api.comercios);
   const donacion = useCarga(() => api.donacion(id), [id]);
+  const sugerencias = useCarga(() => api.sugerencias(id), [id]);
+  const comedor = comedores.datos?.find((c) => c.id === sesion.id);
   const [nombre, setNombre] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -95,6 +98,10 @@ export function ComedorDonacion({ sesion, id }: { sesion: Sesion; id: number }) 
     }
   };
 
+  const ranking = sugerencias.datos ?? [];
+  const mia = ranking.find((s) => s.comedorId === sesion.id);
+  const posicion = mia?.elegible ? ranking.filter((s) => s.elegible).findIndex((s) => s.comedorId === sesion.id) + 1 : 0;
+
   return (
     <Marco pestanas={PESTANAS} activa="/comedor">
       <Cabecera titulo="Detalle" atras="/comedor" />
@@ -107,9 +114,7 @@ export function ComedorDonacion({ sesion, id }: { sesion: Sesion; id: number }) 
               <div style={{ height: 130, borderRadius: 20, background: 'linear-gradient(135deg,#f4d9a8,#e8913a)', display: 'grid', placeItems: 'center', fontSize: 72 }} aria-hidden="true">
                 {ICONO[d.categoria]}
               </div>
-              <div className="row between" style={{ marginTop: 14 }}>
-                <h1 style={{ fontSize: 24 }}>{d.producto} · {cantidadTexto(d.cantidad, d.unidad)}</h1>
-              </div>
+              <h1 style={{ fontSize: 24, marginTop: 14 }}>{d.producto} · {cantidadTexto(d.cantidad, d.unidad)}</h1>
               <div className="row" style={{ marginTop: 6, flexWrap: 'wrap' }}>
                 <span className={`sem ${claseSemaforo(d.nivelCaducidad)}`}>{textoVence(d.caducaEn, ahora)}</span>
                 <Chip tono="gray">{NOMBRE_CATEGORIA[d.categoria]}</Chip>
@@ -119,6 +124,33 @@ export function ComedorDonacion({ sesion, id }: { sesion: Sesion; id: number }) 
                 {comercio?.nombre ?? 'Comercio'}{comercio && comedor ? ` · ${km(distanciaKm(comedor, comercio))}` : ''} · recojo hasta {hora(d.ventanaHasta)}
               </div>
               {comercio && <div className="small muted">{comercio.direccion}</div>}
+
+              {mia && (
+                <>
+                  <div className="section-title">
+                    <h2>¿Por qué te lo sugerimos?</h2>
+                    <Chip tono={mia.elegible ? 'green' : 'red'}>{mia.elegible ? `${mia.puntaje} / 100` : 'No disponible'}</Chip>
+                  </div>
+                  <div className="why">
+                    {COMPONENTES.map((c) => (
+                      <div className="bar-row" key={c.clave}>
+                        <span>{c.etiqueta}</span>
+                        <div className="progress"><i style={{ width: `${mia.componentes[c.clave]}%` }} /></div>
+                        <b>{mia.componentes[c.clave]}</b>
+                      </div>
+                    ))}
+                    <ul className="small muted" style={{ paddingLeft: 18, marginTop: 10 }}>
+                      {mia.razones.map((r) => <li key={r}>{r}</li>)}
+                    </ul>
+                    {mia.motivoNoElegible && <p className="small" style={{ color: 'var(--red)', marginTop: 6 }}>{mia.motivoNoElegible}</p>}
+                  </div>
+                  {posicion > 0 && (
+                    <p className="small muted" style={{ marginTop: 8 }}>
+                      Tu comedor es el n.º {posicion} de {ranking.filter((s) => s.elegible).length} comedores de la red para esta donación.
+                    </p>
+                  )}
+                </>
+              )}
 
               <div className="card" style={{ marginTop: 14 }}>
                 <div className="row">
@@ -150,7 +182,10 @@ export function ComedorDonacion({ sesion, id }: { sesion: Sesion; id: number }) 
 }
 
 export function ComedorReservas({ sesion }: { sesion: Sesion }) {
-  const { comedor, comercios, donaciones } = useDatosComedor(sesion);
+  const comedores = useCarga(api.comedores);
+  const comercios = useCarga(api.comercios);
+  const donaciones = useCarga(() => api.donaciones());
+  const comedor = comedores.datos?.find((c) => c.id === sesion.id);
   const ahora = new Date();
 
   return (
@@ -250,7 +285,7 @@ function TarjetaReserva({ d, comedor, comercio, ahora, alCambiar }: { d: Donacio
         <button className="btn block" style={{ minHeight: 48 }} disabled={enviando || !estadoOk} type="submit">
           {enviando ? 'Confirmando…' : 'Confirmar recogida'}
         </button>
-        <p className="hint">Se registrará quién recibió el alimento y la hora, para la trazabilidad.</p>
+        <p className="hint">Se registrará quién recibió el alimento y pasará automáticamente a tu inventario.</p>
       </form>
     </section>
   );

@@ -63,12 +63,46 @@ CREATE TABLE IF NOT EXISTS eventos (
   detalle TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_eventos_fecha ON eventos(fecha);
+
+CREATE TABLE IF NOT EXISTS inventario_lotes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  comedor_id INTEGER NOT NULL REFERENCES comedores(id),
+  producto TEXT NOT NULL,
+  categoria TEXT NOT NULL,
+  unidad TEXT NOT NULL,
+  cantidad REAL NOT NULL CHECK (cantidad >= 0),
+  cantidad_inicial REAL NOT NULL CHECK (cantidad_inicial > 0),
+  caduca_en TEXT,
+  origen TEXT NOT NULL CHECK (origen IN ('donacion','manual')),
+  donacion_id INTEGER REFERENCES donaciones(id),
+  creado_en TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_lotes_comedor ON inventario_lotes(comedor_id);
+
+CREATE TABLE IF NOT EXISTS inventario_movimientos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lote_id INTEGER NOT NULL REFERENCES inventario_lotes(id),
+  comedor_id INTEGER NOT NULL REFERENCES comedores(id),
+  tipo TEXT NOT NULL CHECK (tipo IN ('entrada','consumo','merma','salida')),
+  cantidad REAL NOT NULL CHECK (cantidad > 0),
+  fecha TEXT NOT NULL,
+  motivo TEXT NOT NULL DEFAULT '',
+  actor TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS inventario_minimos (
+  comedor_id INTEGER NOT NULL REFERENCES comedores(id),
+  producto TEXT NOT NULL,
+  unidad TEXT NOT NULL,
+  minimo REAL NOT NULL CHECK (minimo >= 0),
+  PRIMARY KEY (comedor_id, producto, unidad)
+);
 `;
 
-const TABLAS = ['eventos', 'donaciones', 'comedores', 'comercios'];
+const TABLAS = ['inventario_movimientos', 'inventario_lotes', 'inventario_minimos', 'eventos', 'donaciones', 'comedores', 'comercios'];
 
 /** Versión del esquema. Si la base local es más antigua se recrea (solo contiene datos sintéticos). */
-const VERSION_ESQUEMA = 2;
+const VERSION_ESQUEMA = 3;
 
 /** Abre la base de datos SQLite (archivo, o ":memory:" para pruebas) y crea el esquema. */
 export function abrirBD(ruta: string = process.env.DB_PATH ?? resolve(import.meta.dirname, '../data/ayni.db')): BD {

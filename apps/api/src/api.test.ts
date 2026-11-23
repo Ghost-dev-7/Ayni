@@ -45,9 +45,8 @@ describe('API', () => {
     const creada = r.json();
     assert.equal(creada.estado, 'publicada');
     assert.equal(creada.codigo, 'DON-0041');
-    const eventos = (await app.inject({ url: '/api/eventos?limite=1' })).json();
-    assert.equal(eventos[0].entidad, 'DON-0041');
-    assert.equal(eventos[0].accion, 'Publicada');
+    const eventos = (await app.inject({ url: '/api/eventos?entidad=DON-0041' })).json();
+    assert.deepEqual(eventos.map((e: { accion: string }) => e.accion).reverse(), ['Publicada', 'Emparejamiento calculado']);
   });
 
   it('rechaza publicar un producto ya vencido', async () => {

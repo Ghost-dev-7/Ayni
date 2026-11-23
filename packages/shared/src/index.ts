@@ -142,6 +142,122 @@ export interface Donacion {
   cantidadRecibida: number | null;
 }
 
+/** Perfil editable de un comedor: lo que declara y condiciona el emparejamiento. */
+export const comedorPerfilSchema = z.object({
+  necesidades: z.array(categoriaSchema).max(CATEGORIAS.length),
+  racionesDia: z.number().int().min(1).max(5000),
+  refrigeracion: z.boolean(),
+  horarioRecojo: z.string().trim().min(3).max(80),
+});
+export type ComedorPerfil = z.infer<typeof comedorPerfilSchema>;
+
+/** Una persona del equipo administrador asigna una donación a un comedor concreto. */
+export const reasignarInputSchema = z.object({ comedorId: z.number().int().positive() });
+
+export const TIPOS_SALIDA = ['consumo', 'merma', 'salida'] as const;
+export const tipoSalidaSchema = z.enum(TIPOS_SALIDA);
+export type TipoSalida = z.infer<typeof tipoSalidaSchema>;
+
+/** Entrada manual de un lote al inventario de un comedor. */
+export const entradaInventarioSchema = z.object({
+  producto: z.string().trim().min(2).max(80),
+  categoria: categoriaSchema,
+  unidad: unidadSchema,
+  cantidad: z.number().positive().max(100000),
+  caducaEn: z.string().datetime({ offset: true }).nullable().optional(),
+  motivo: z.string().trim().max(120).optional(),
+});
+export type EntradaInventario = z.infer<typeof entradaInventarioSchema>;
+
+/** Consumo, merma o salida de un producto: se descuenta primero lo que vence antes (PEPS). */
+export const salidaInventarioSchema = z.object({
+  producto: z.string().trim().min(2).max(80),
+  unidad: unidadSchema,
+  tipo: tipoSalidaSchema,
+  cantidad: z.number().positive().max(100000),
+  motivo: z.string().trim().max(120).optional(),
+});
+export type SalidaInventario = z.infer<typeof salidaInventarioSchema>;
+
+export const minimoInventarioSchema = z.object({
+  producto: z.string().trim().min(2).max(80),
+  unidad: unidadSchema,
+  minimo: z.number().min(0).max(100000),
+});
+export type MinimoInventario = z.infer<typeof minimoInventarioSchema>;
+
+export interface LoteInventario {
+  id: number;
+  comedorId: number;
+  producto: string;
+  categoria: Categoria;
+  unidad: Unidad;
+  cantidad: number;
+  cantidadInicial: number;
+  caducaEn: string | null;
+  origen: 'donacion' | 'manual';
+  donacionId: number | null;
+  creadoEn: string;
+  nivelCaducidad: 'vencido' | 'rojo' | 'amarillo' | 'verde' | 'sin-fecha';
+}
+
+export interface ProductoInventario {
+  producto: string;
+  categoria: Categoria;
+  unidad: Unidad;
+  total: number;
+  minimo: number | null;
+  bajoMinimo: boolean;
+  proximaCaducidad: string | null;
+  nivelCaducidad: LoteInventario['nivelCaducidad'];
+  lotes: number;
+}
+
+export interface InventarioComedor {
+  comedorId: number;
+  resumen: {
+    stockKg: number;
+    lotes: number;
+    lotesPorVencer: number;
+    lotesVencidos: number;
+    productosBajoMinimo: number;
+  };
+  productos: ProductoInventario[];
+  lotes: LoteInventario[];
+}
+
+export interface InventarioCentral {
+  totales: { stockKg: number; lotesPorVencer: number; lotesVencidos: number; productosBajoMinimo: number; comedores: number };
+  comedores: { comedorId: number; nombre: string; activo: boolean; stockKg: number; lotes: number; lotesPorVencer: number; lotesVencidos: number; productosBajoMinimo: number }[];
+  /** Lotes que vencen pronto o ya vencieron, de toda la red. */
+  porVencer: (LoteInventario & { comedor: string })[];
+  bajoMinimo: { comedorId: number; comedor: string; producto: string; unidad: Unidad; total: number; minimo: number }[];
+}
+
+/** Componentes del puntaje de emparejamiento (cada uno de 0 a 100). */
+export interface ComponentesPuntaje {
+  urgencia: number;
+  cercania: number;
+  necesidad: number;
+  capacidad: number;
+}
+
+export interface Sugerencia {
+  comedorId: number;
+  nombre: string;
+  zona: string;
+  /** Puntaje de 0 a 100. 0 si el comedor no es elegible. */
+  puntaje: number;
+  componentes: ComponentesPuntaje;
+  distanciaKm: number;
+  elegible: boolean;
+  motivoNoElegible: string | null;
+  /** Frases que explican, en lenguaje claro, por qué obtuvo ese puntaje. */
+  razones: string[];
+}
+
+export const PESOS_PUNTAJE = { urgencia: 0.35, cercania: 0.25, necesidad: 0.25, capacidad: 0.15 } as const;
+
 /** Cuántos kg equivalen a una ración. Supuesto de demostración, ajustable. */
 export const KG_POR_RACION = 0.5;
 

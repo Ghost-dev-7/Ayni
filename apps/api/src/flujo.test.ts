@@ -62,7 +62,7 @@ describe('flujo publicar → reservar → recoger', () => {
 
     const eventos = (await app.inject({ url: '/api/eventos?limite=10' })).json() as { entidad: string; accion: string }[];
     const acciones = eventos.filter((e) => e.entidad === codigo).map((e) => e.accion).reverse();
-    assert.deepEqual(acciones, ['Publicada', 'Reservada', 'Recogida confirmada']);
+    assert.deepEqual(acciones, ['Publicada', 'Emparejamiento calculado', 'Reservada', 'Recogida confirmada']);
   });
 
   it('no deja reservar dos veces la misma donación', async () => {
