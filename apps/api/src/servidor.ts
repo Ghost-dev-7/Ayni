@@ -4,6 +4,8 @@ import {
   comercioInputSchema,
   donacionInputSchema,
   estadoDonacionSchema,
+  recogerInputSchema,
+  reservarInputSchema,
 } from '@ayni/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
@@ -17,7 +19,12 @@ import {
   listarComercios,
   listarDonaciones,
   listarEventos,
+  marcarVencidas,
+  obtenerDonacion,
+  recogerDonacion,
+  reservarDonacion,
 } from './repositorio.ts';
+import { sembrar } from './semilla.ts';
 
 /** Construye la API. Recibe la base de datos y un reloj para poder probarla. */
 export function construirApi(db: BD, reloj: () => Date = () => new Date()): FastifyInstance {
@@ -53,7 +60,27 @@ export function construirApi(db: BD, reloj: () => Date = () => new Date()): Fast
     const { estado } = req.query as { estado?: string };
     const filtro = estado ? estadoDonacionSchema.parse(estado) : undefined;
     const ahora = reloj();
+    marcarVencidas(db, ahora);
     return listarDonaciones(db, filtro).map((d) => ({ ...d, nivelCaducidad: nivelCaducidad(d.caducaEn, ahora) }));
+  });
+
+  app.get('/api/donaciones/:id', async (req, reply) => {
+    const id = Number((req.params as { id: string }).id);
+    const ahora = reloj();
+    marcarVencidas(db, ahora);
+    const d = obtenerDonacion(db, id);
+    if (!d) return reply.status(404).send({ error: 'La donación no existe.' });
+    return { ...d, nivelCaducidad: nivelCaducidad(d.caducaEn, ahora) };
+  });
+
+  app.post('/api/donaciones/:id/reservar', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    return reservarDonacion(db, id, reservarInputSchema.parse(req.body), reloj());
+  });
+
+  app.post('/api/donaciones/:id/recoger', async (req) => {
+    const id = Number((req.params as { id: string }).id);
+    return recogerDonacion(db, id, recogerInputSchema.parse(req.body), reloj());
   });
 
   app.post('/api/donaciones', async (req, reply) => {
@@ -78,7 +105,10 @@ export function construirApi(db: BD, reloj: () => Date = () => new Date()): Fast
 // Ejecución directa: `npm run dev`
 if (process.argv[1] && import.meta.filename.replaceAll('\\', '/') === process.argv[1].replaceAll('\\', '/')) {
   const puerto = Number(process.env.PORT ?? 3001);
-  const app = construirApi(abrirBD());
+  const db = abrirBD();
+  // Primera ejecución: si la base está vacía, carga los datos sintéticos de demostración.
+  if (listarComercios(db).length === 0) console.log('Base vacía: cargando datos sintéticos', sembrar(db));
+  const app = construirApi(db);
   await app.listen({ port: puerto, host: '127.0.0.1' });
   console.log(`API de Ayni escuchando en http://127.0.0.1:${puerto}`);
 }

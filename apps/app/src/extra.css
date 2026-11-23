@@ -1,0 +1,18 @@
+/* Estilos propios de la app que no estaban en el sistema de diseño base. */
+body.app { background: radial-gradient(circle at 20% 0%, #f5e7c8 0, transparent 40%), radial-gradient(circle at 90% 100%, #cfe6d6 0, transparent 45%), #efe8d8; }
+.aviso { border-radius: 14px; padding: 12px 14px; background: var(--sand); }
+.aviso.error { background: var(--red-100); color: #7a2418; }
+.aviso.error .btn { margin-top: 8px; }
+.aviso.ok { background: var(--g100); color: var(--g900); }
+a.card, a.list-item { color: inherit; }
+.list-item.apagado { opacity: .55; }
+.err-form { margin-top: 10px; }
+button.btn:disabled { opacity: .55; cursor: not-allowed; }
+.checks label { display: flex; gap: 10px; align-items: center; }
+.checks input[type='checkbox'] { width: 20px; height: 20px; accent-color: var(--g700); }
+.codigo { font-family: var(--serif); font-size: 40px; letter-spacing: .2em; font-weight: 700; color: var(--g900); }
+select.input { appearance: auto; }
+.seg button { flex: 1; text-align: center; padding: 10px 6px; border: 0; border-radius: 999px; background: transparent; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.seg button.on { background: var(--paper); color: var(--g900); box-shadow: var(--shadow); }
+.logo-rol { width: 190px; max-width: 70%; height: auto; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

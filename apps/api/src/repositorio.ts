@@ -8,10 +8,13 @@ import type {
   DonacionInput,
   EstadoDonacion,
   EventoRegistro,
+  RecogerInput,
+  ReservarInput,
   TipoComercio,
   Unidad,
 } from '@ayni/shared';
 import type { BD } from './bd.ts';
+import { ErrorDeNegocio, exigirTransicion, generarCodigoEntrega } from './estados.ts';
 
 type Fila = Record<string, unknown>;
 
@@ -61,6 +64,12 @@ function donacionDe(f: Fila): Donacion {
     estado: f.estado as EstadoDonacion,
     comedorId: f.comedor_id === null ? null : Number(f.comedor_id),
     creadaEn: String(f.creada_en),
+    codigoEntrega: f.codigo_entrega === null ? null : String(f.codigo_entrega),
+    reservadaPor: f.reservada_por === null ? null : String(f.reservada_por),
+    reservadaEn: f.reservada_en === null ? null : String(f.reservada_en),
+    recogidaPor: f.recogida_por === null ? null : String(f.recogida_por),
+    recogidaEn: f.recogida_en === null ? null : String(f.recogida_en),
+    cantidadRecibida: f.cantidad_recibida === null ? null : Number(f.cantidad_recibida),
   };
 }
 
@@ -193,6 +202,79 @@ export function crearDonacion(db: BD, d: DonacionInput, ahora: Date = new Date()
     fecha: ahora.toISOString(),
   });
   return obtenerDonacion(db, siguiente)!;
+}
+
+/** Pasa a "vencida" toda donación publicada o reservada cuya fecha de caducidad ya pasó. */
+export function marcarVencidas(db: BD, ahora: Date): number {
+  const filas = db
+    .prepare("SELECT * FROM donaciones WHERE estado IN ('publicada','reservada') AND caduca_en <= ?")
+    .all(ahora.toISOString()) as Fila[];
+  for (const f of filas) {
+    const d = donacionDe(f);
+    db.prepare("UPDATE donaciones SET estado = 'vencida' WHERE id = ?").run(d.id);
+    registrarEvento(db, {
+      rol: 'sistema',
+      actor: 'Caducidad',
+      accion: 'Marcada como vencida',
+      entidad: d.codigo,
+      detalle: `${d.producto} · ${d.cantidad} ${d.unidad}`,
+      fecha: ahora.toISOString(),
+    });
+  }
+  return filas.length;
+}
+
+/** Un comedor reserva una donación publicada. */
+export function reservarDonacion(db: BD, id: number, d: ReservarInput, ahora: Date = new Date()): Donacion {
+  marcarVencidas(db, ahora);
+  const donacion = obtenerDonacion(db, id);
+  if (!donacion) throw new ErrorDeNegocio('La donación no existe.', 404);
+  const comedor = obtenerComedor(db, d.comedorId);
+  if (!comedor || !comedor.activo) throw new ErrorDeNegocio('El comedor no existe o no está activo.', 404);
+  exigirTransicion(donacion.estado, 'reservada');
+  if (donacion.requiereFrio && !comedor.refrigeracion) {
+    throw new ErrorDeNegocio('Este producto requiere refrigeración y el comedor no la tiene.', 422);
+  }
+  const codigoEntrega = generarCodigoEntrega();
+  db.prepare(
+    "UPDATE donaciones SET estado = 'reservada', comedor_id = ?, codigo_entrega = ?, reservada_por = ?, reservada_en = ? WHERE id = ?",
+  ).run(comedor.id, codigoEntrega, d.reservadoPor, ahora.toISOString(), id);
+  registrarEvento(db, {
+    rol: 'comedor',
+    actor: comedor.nombre,
+    accion: 'Reservada',
+    entidad: donacion.codigo,
+    detalle: `${donacion.producto} · ${donacion.cantidad} ${donacion.unidad} · por ${d.reservadoPor}`,
+    fecha: ahora.toISOString(),
+  });
+  return obtenerDonacion(db, id)!;
+}
+
+/** El comedor que reservó confirma la recogida. */
+export function recogerDonacion(db: BD, id: number, d: RecogerInput, ahora: Date = new Date()): Donacion {
+  marcarVencidas(db, ahora);
+  const donacion = obtenerDonacion(db, id);
+  if (!donacion) throw new ErrorDeNegocio('La donación no existe.', 404);
+  exigirTransicion(donacion.estado, 'recogida');
+  if (donacion.comedorId !== d.comedorId) {
+    throw new ErrorDeNegocio('Solo el comedor que reservó puede confirmar la recogida.', 403);
+  }
+  if (d.cantidadRecibida > donacion.cantidad) {
+    throw new ErrorDeNegocio('La cantidad recibida no puede superar la cantidad publicada.', 422);
+  }
+  const comedor = obtenerComedor(db, d.comedorId)!;
+  db.prepare(
+    "UPDATE donaciones SET estado = 'recogida', recogida_por = ?, recogida_en = ?, cantidad_recibida = ? WHERE id = ?",
+  ).run(d.recogidoPor, ahora.toISOString(), d.cantidadRecibida, id);
+  registrarEvento(db, {
+    rol: 'comedor',
+    actor: comedor.nombre,
+    accion: 'Recogida confirmada',
+    entidad: donacion.codigo,
+    detalle: `${donacion.producto} · ${d.cantidadRecibida} ${donacion.unidad} recibidos · por ${d.recogidoPor}`,
+    fecha: ahora.toISOString(),
+  });
+  return obtenerDonacion(db, id)!;
 }
 
 export function listarEventos(db: BD, limite = 100): EventoRegistro[] {

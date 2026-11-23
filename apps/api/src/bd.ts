@@ -43,7 +43,13 @@ CREATE TABLE IF NOT EXISTS donaciones (
   requiere_frio INTEGER NOT NULL DEFAULT 0,
   estado TEXT NOT NULL CHECK (estado IN ('publicada','reservada','recogida','vencida')),
   comedor_id INTEGER REFERENCES comedores(id),
-  creada_en TEXT NOT NULL
+  creada_en TEXT NOT NULL,
+  codigo_entrega TEXT,
+  reservada_por TEXT,
+  reservada_en TEXT,
+  recogida_por TEXT,
+  recogida_en TEXT,
+  cantidad_recibida REAL
 );
 CREATE INDEX IF NOT EXISTS idx_donaciones_estado ON donaciones(estado);
 
@@ -61,13 +67,23 @@ CREATE INDEX IF NOT EXISTS idx_eventos_fecha ON eventos(fecha);
 
 const TABLAS = ['eventos', 'donaciones', 'comedores', 'comercios'];
 
+/** Versión del esquema. Si la base local es más antigua se recrea (solo contiene datos sintéticos). */
+const VERSION_ESQUEMA = 2;
+
 /** Abre la base de datos SQLite (archivo, o ":memory:" para pruebas) y crea el esquema. */
 export function abrirBD(ruta: string = process.env.DB_PATH ?? resolve(import.meta.dirname, '../data/ayni.db')): BD {
   if (ruta !== ':memory:') mkdirSync(dirname(ruta), { recursive: true });
   const db = new DatabaseSync(ruta);
   db.exec('PRAGMA foreign_keys = ON;');
   if (ruta !== ':memory:') db.exec('PRAGMA journal_mode = WAL;');
+  const version = Number((db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version);
+  if (version < VERSION_ESQUEMA) {
+    db.exec('PRAGMA foreign_keys = OFF;');
+    for (const t of TABLAS) db.exec(`DROP TABLE IF EXISTS ${t};`);
+    db.exec('PRAGMA foreign_keys = ON;');
+  }
   db.exec(ESQUEMA);
+  db.exec(`PRAGMA user_version = ${VERSION_ESQUEMA};`);
   return db;
 }
 

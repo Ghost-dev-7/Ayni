@@ -78,6 +78,22 @@ export const donacionInputSchema = z
   });
 export type DonacionInput = z.infer<typeof donacionInputSchema>;
 
+/** Un comedor reserva una donación publicada. */
+export const reservarInputSchema = z.object({
+  comedorId: z.number().int().positive(),
+  reservadoPor: z.string().trim().min(2).max(80),
+});
+export type ReservarInput = z.infer<typeof reservarInputSchema>;
+
+/** El comedor confirma que recogió la donación y declara la cantidad recibida. */
+export const recogerInputSchema = z.object({
+  comedorId: z.number().int().positive(),
+  recogidoPor: z.string().trim().min(2).max(80),
+  cantidadRecibida: z.number().positive().max(100000),
+  estadoOk: z.literal(true, { errorMap: () => ({ message: 'Debes confirmar que el producto está en buen estado.' }) }),
+});
+export type RecogerInput = z.infer<typeof recogerInputSchema>;
+
 export interface Comercio {
   id: number;
   nombre: string;
@@ -117,6 +133,13 @@ export interface Donacion {
   estado: EstadoDonacion;
   comedorId: number | null;
   creadaEn: string;
+  /** Código corto que identifica la entrega en el mostrador (se genera al reservar). */
+  codigoEntrega: string | null;
+  reservadaPor: string | null;
+  reservadaEn: string | null;
+  recogidaPor: string | null;
+  recogidaEn: string | null;
+  cantidadRecibida: number | null;
 }
 
 export interface EventoRegistro {

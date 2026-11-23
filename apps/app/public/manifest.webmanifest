@@ -1,0 +1,13 @@
+{
+  "name": "Ayni",
+  "short_name": "Ayni",
+  "description": "Conecta comercios con alimentos por vencer y comedores populares de Villa El Salvador.",
+  "lang": "es",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fbf6ec",
+  "theme_color": "#123a2b",
+  "icons": [
+    { "src": "/icono.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -83,8 +83,9 @@ export function sembrar(db: BD, ahora: Date = new Date()): ResumenSemilla {
 
   const insDonacion = db.prepare(
     `INSERT INTO donaciones
-      (id, codigo, comercio_id, producto, categoria, cantidad, unidad, caduca_en, ventana_desde, ventana_hasta, requiere_frio, estado, comedor_id, creada_en)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, codigo, comercio_id, producto, categoria, cantidad, unidad, caduca_en, ventana_desde, ventana_hasta, requiere_frio, estado, comedor_id, creada_en,
+       codigo_entrega, reservada_por, reservada_en, recogida_por, recogida_en, cantidad_recibida)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
   let id = 0;
@@ -110,19 +111,22 @@ export function sembrar(db: BD, ahora: Date = new Date()): ResumenSemilla {
     const aptos = comedores.filter((k) => k.activo && (!producto.frio || k.refrigeracion));
     const comedor = plan.estado === 'publicada' || plan.estado === 'vencida' ? null : azar.elegir(aptos);
     const codigo = codigoDonacion(id);
+    const reservaMs = comedor ? plan.creadaMs + azar.entero(5, 40) * 60_000 : null;
+    const recogidaMs = plan.estado === 'recogida' && reservaMs !== null ? Math.min(reservaMs + azar.entero(30, 150) * 60_000, t0 - 60_000) : null;
+    const encargado = comedor ? `Encargado de ${comedor.zona}` : null;
+    const codigoEntrega = comedor ? `${String(azar.entero(0, 99)).padStart(2, '0')}-${String(azar.entero(0, 99)).padStart(2, '0')}` : null;
     insDonacion.run(
       id, codigo, comercio.id, producto.nombre, producto.categoria, cantidad, producto.unidad,
       iso(plan.caducaMs), iso(plan.creadaMs), iso(ventanaHasta), producto.frio ? 1 : 0,
       plan.estado, comedor?.id ?? null, iso(plan.creadaMs),
+      codigoEntrega, encargado, reservaMs === null ? null : iso(reservaMs),
+      recogidaMs === null ? null : encargado, recogidaMs === null ? null : iso(recogidaMs), recogidaMs === null ? null : cantidad,
     );
     const det = `${producto.nombre} · ${cantidad} ${producto.unidad}`;
     evento(plan.creadaMs, 'comercio', comercio.nombre, 'Publicada', codigo, det);
-    if (comedor) {
-      const reservaMs = plan.creadaMs + azar.entero(5, 40) * 60_000;
+    if (comedor && reservaMs !== null) {
       evento(reservaMs, 'comedor', comedor.nombre, 'Reservada', codigo, det);
-      if (plan.estado === 'recogida') {
-        evento(Math.min(reservaMs + azar.entero(30, 150) * 60_000, t0 - 60_000), 'comedor', comedor.nombre, 'Recogida confirmada', codigo, det);
-      }
+      if (recogidaMs !== null) evento(recogidaMs, 'comedor', comedor.nombre, 'Recogida confirmada', codigo, det);
     }
     if (plan.estado === 'vencida') evento(plan.caducaMs, 'sistema', 'Caducidad', 'Marcada como vencida', codigo, det);
   };
